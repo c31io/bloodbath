@@ -3,10 +3,11 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import type { World } from "../ecs/ecs.js";
+import { LAYOUT, ROOM } from "./bedroom.js";
+import { windAt } from "./systems.js";
 import type { EggSpotC, Fan, Host, Mosquito, Pos } from "./components.js";
-import { LAYOUT } from "./bedroom.js";
 import type { NightWorld } from "./flow.js";
+import { resourcesOf } from "./flow.js";
 
 export interface SenseChannels {
   world: boolean;
@@ -60,6 +61,7 @@ export class GameView {
   private femaleMote: THREE.Sprite | null = null;
   private idleAngle = 0;
   private clock = new THREE.Clock();
+  private plumeGain = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -118,7 +120,7 @@ export class GameView {
   }
 
   private buildRoom(): void {
-    const R = { x: 3, z: 2.5, h: 3 };
+    const R = { x: -ROOM.minX, z: -ROOM.minZ, h: ROOM.height };
     this.box(R.x * 2, 0.1, R.z * 2, 0, -0.05, 0, this.mat(0x241f31));
     this.box(R.x * 2, 0.1, R.z * 2, 0, R.h, 0, this.mat(0x181523));
     this.box(0.1, R.h, R.z * 2, -R.x, R.h / 2, 0, this.mat(0x2c2540));
@@ -293,7 +295,7 @@ export class GameView {
           map: this.glow,
           blending: THREE.AdditiveBlending,
           transparent: true,
-          opacity: 0.5,
+          opacity: 0.5 * this.plumeGain,
           depthWrite: false,
         }),
       );
@@ -318,23 +320,14 @@ export class GameView {
     }
   }
 
-  private sampleWind(world: NightWorld, pos: Pos): { x: number; z: number } {
-    const id = world.query("fan")[0];
-    if (id === undefined) return { x: 0.06, z: 0.02 };
-    const fan = world.get<Fan>(id, "fan")!;
-    const fp = world.get<Pos>(id, "pos")!;
-    if (Math.hypot(pos.x - fp.x, pos.z - fp.z) < fan.radius && pos.y < fp.y) {
-      return { x: Math.cos(fan.angle) * 1.2, z: Math.sin(fan.angle) * 1.2 };
-    }
-    return { x: 0.06, z: 0.02 };
-  }
-
   /** Per-frame sync: camera, fan, Heat, CO2, Egg Spots, the female mote. Null world = menu idle. */
   sync(world: NightWorld | null, channels: SenseChannels): void {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     const t = performance.now() / 1000;
     const player = world?.query("player")[0];
     if (world !== null && player !== undefined) {
+      // Keen Sense sharpens the plume channel
+      this.plumeGain = resourcesOf(world).colony.skills.has("keenSense") ? 1.6 : 1;
       const m = world.get<Mosquito>(player, "mosquito")!;
       const p = world.get<Pos>(player, "pos")!;
       this.camera.quaternion.setFromEuler(new THREE.Euler(m.pitch, m.yaw, m.roll, "YXZ"));
@@ -372,11 +365,8 @@ export class GameView {
             plume.vel[i * 3 + 2] = (Math.random() - 0.5) * 0.05;
             plume.life[i] = 2.5 + Math.random() * 2;
           }
-          const w = this.sampleWind(world, {
-            x: plume.positions[i * 3]!,
-            y: plume.positions[i * 3 + 1]!,
-            z: plume.positions[i * 3 + 2]!,
-          });
+          const windPos = { x: plume.positions[i * 3]!, y: plume.positions[i * 3 + 1]!, z: plume.positions[i * 3 + 2]! };
+          const w = windAt(world, windPos, 0.24);
           plume.positions[i * 3] = (plume.positions[i * 3] ?? 0) + (plume.vel[i * 3]! + w.x) * dt;
           plume.positions[i * 3 + 1] = (plume.positions[i * 3 + 1] ?? 0) + plume.vel[i * 3 + 1]! * dt;
           plume.positions[i * 3 + 2] = (plume.positions[i * 3 + 2] ?? 0) + (plume.vel[i * 3 + 2]! + w.z) * dt;

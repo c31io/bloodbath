@@ -34,20 +34,31 @@ function playerState(world: World): { player: number; mosquito: Mosquito; pos: P
   return { player, mosquito, pos: world.get<Pos>(player, "pos")! };
 }
 
-function windPush(world: World, pos: Pos, windMod: number): { x: number; y: number; z: number } {
+/**
+ * Shared wind field: the fan's blast inside its arc below the hub, else a
+ * faint room drift. Used by flight, CO2 plumes, and view advection.
+ */
+export function windAt(world: World, pos: Pos, windMod: number): { x: number; y: number; z: number } {
   for (const id of world.query("fan")) {
     const fan = world.get<Fan>(id, "fan")!;
     const fp = world.get<Pos>(id, "pos")!;
-    const dx = pos.x - fp.x;
-    const dz = pos.z - fp.z;
-    const horiz = Math.hypot(dx, dz);
+    const horiz = Math.hypot(pos.x - fp.x, pos.z - fp.z);
     if (horiz < fan.radius && pos.y < fp.y && pos.y > fp.y - 1.4) {
       // blast from the rotating blades, softened by Drug Resistance / Tough wings
       const s = fan.strength * windMod * 5;
       return { x: Math.cos(fan.angle) * s, y: -0.4 * s, z: Math.sin(fan.angle) * s };
     }
   }
-  return { x: 0, y: 0, z: 0 };
+  return { x: 0.06, y: 0, z: 0.02 };
+}
+
+/** Drain Energy; starvation kills at zero. */
+function drainOrStarve(mosquito: Mosquito, night: NightState, dt: number, rate: number): void {
+  mosquito.energy = drainEnergy(mosquito.energy, { dt, rate });
+  if (mosquito.energy <= 0) {
+    mosquito.alive = false;
+    night.outcome = "starved";
+  }
 }
 
 /** Register the headless-safe logic systems, in tick order. */
@@ -97,11 +108,7 @@ export function registerLogicSystems(world: World): void {
         mosquito.feeding = false;
         vel.y = 1.2;
       }
-      mosquito.energy = drainEnergy(mosquito.energy, { dt, rate: PASSIVE_DRAIN_FEMALE });
-      if (mosquito.energy <= 0) {
-        mosquito.alive = false;
-        night.outcome = "starved";
-      }
+      drainOrStarve(mosquito, night, dt, PASSIVE_DRAIN_FEMALE);
       return;
     }
 
@@ -118,7 +125,7 @@ export function registerLogicSystems(world: World): void {
     vel.y += Math.sin(mosquito.pitch) * thrust * dt * mosquito.speedMod + (input.up ? 1.5 * dt : 0) - (input.down ? 1.5 * dt : 0);
     vel.z += (-cy * cp) * thrust * dt * mosquito.speedMod;
 
-    const wind = windPush(w, pos, mosquito.windMod);
+    const wind = windAt(w, pos, mosquito.windMod);
     vel.x += wind.x * dt;
     vel.y += wind.y * dt;
     vel.z += wind.z * dt;
@@ -159,11 +166,7 @@ export function registerLogicSystems(world: World): void {
     const drainRate =
       (mosquito.sex === "male" ? PASSIVE_DRAIN_MALE : PASSIVE_DRAIN_FEMALE) +
       (input.forward ? FLIGHT_DRAIN : 0);
-    mosquito.energy = drainEnergy(mosquito.energy, { dt, rate: drainRate });
-    if (mosquito.energy <= 0) {
-      mosquito.alive = false;
-      night.outcome = "starved";
-    }
+    drainOrStarve(mosquito, night, dt, drainRate);
   });
 
   world.system("courtship", (w, dt) => {
@@ -187,12 +190,8 @@ export function registerLogicSystems(world: World): void {
     } else {
       court.resonance = Math.max(0, court.resonance - COURTSHIP_LOSE_RATE * dt);
     }
-    p.mosquito.energy = drainEnergy(p.mosquito.energy, { dt, rate: COURTSHIP_DRAIN });
-    if (p.mosquito.energy <= 0) {
-      p.mosquito.alive = false;
-      night.outcome = "starved";
-      return;
-    }
+    drainOrStarve(p.mosquito, night, dt, COURTSHIP_DRAIN);
+    if (!p.mosquito.alive) return;
     if (court.resonance >= 100) {
       p.mosquito.alive = false;
       night.outcome = "mated"; // it fucks to its own demise
@@ -240,6 +239,7 @@ export function registerLogicSystems(world: World): void {
       if (Math.hypot(pp.x - p.pos.x, pp.y - p.pos.y, pp.z - p.pos.z) < SIP_RANGE) {
         const plant = w.get<Plant>(id, "plant")!;
         p.mosquito.energy = Math.min(p.mosquito.maxEnergy, p.mosquito.energy + sipNectar(plant));
+        night.sipped = true;
         return;
       }
     }
@@ -251,12 +251,12 @@ export function registerLogicSystems(world: World): void {
         if (!spot.used && Math.hypot(sp.x - p.pos.x, sp.y - p.pos.y, sp.z - p.pos.z) < SPOT_RANGE) {
           spot.used = true;
           night.laidEggs = true;
+          night.voluntaryEnd = true;
           night.spotCeiling = spot.quality;
           return;
         }
       }
     }
-    void dt;
   });
 
   world.system("nightTimer", (w, dt) => {

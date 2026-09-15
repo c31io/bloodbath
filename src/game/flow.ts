@@ -1,6 +1,12 @@
 import { World } from "../ecs/ecs.js";
 import { drawBrood } from "../domain/brood.js";
-import { gainSkillPoints, killMosquito, pickOffspring, type Colony } from "../domain/colony.js";
+import {
+  gainSkillPoints,
+  killMosquito,
+  returnToRoster,
+  type Colony,
+} from "../domain/colony.js";
+import { DAWN_SECONDS } from "./systems.js";
 import type { OffspringCard, Sex, SpotQuality, TraitId } from "../domain/types.js";
 import { buildBedroom, LAYOUT } from "./bedroom.js";
 import type { Mosquito } from "./components.js";
@@ -31,6 +37,10 @@ export interface NightState {
   sex: Sex;
   blood: number;
   laidEggs: boolean;
+  /** set when the female lays: she may end the Night voluntarily */
+  voluntaryEnd: boolean;
+  /** one-frame flag: the male sipped Nectar this tick (audio hook) */
+  sipped: boolean;
   spotCeiling: SpotQuality | null;
   brood: OffspringCard[] | null;
   courtship: CourtshipState;
@@ -60,6 +70,8 @@ export interface StartNightOpts {
   rng: () => number;
   /** Mosquito Time multiplier override; defaults to the shipped 0.4. */
   worldScale?: number;
+  /** Live DOM input; when omitted the Night runs on a private zeroed struct. */
+  input?: NightInput;
 }
 
 /** Build a fresh Night world: Bedroom, playable mosquito, female NPC for males. */
@@ -93,7 +105,7 @@ export function startNight(colony: Colony, character: OffspringCard, opts: Start
     world.add(female, "plume", { strength: 0.8 });
   }
 
-  world.res.input = {
+  world.res.input = opts.input ?? {
     mouseDX: 0,
     mouseDY: 0,
     forward: false,
@@ -103,16 +115,18 @@ export function startNight(colony: Colony, character: OffspringCard, opts: Start
     interactPressed: false,
     interactHeld: false,
     spacePressed: false,
-  } satisfies NightInput;
+  };
   world.res.night = {
     sex: character.sex,
     blood: 0,
     laidEggs: false,
+    voluntaryEnd: false,
+    sipped: false,
     spotCeiling: null,
     brood: null,
     courtship: { active: false, resonance: 0, within: false, timeWithin: 0, timeTotal: 0 },
     outcome: "alive",
-    dawn: 180,
+    dawn: DAWN_SECONDS,
     worldScale: opts.worldScale ?? 0.4,
   } satisfies NightState;
   world.res.colony = colony;
@@ -130,6 +144,7 @@ export interface Mods {
   stealthMod: number;
   windMod: number;
   sharpMod: number;
+  senseMod: number;
 }
 
 /** Fold the character's trait and the colony's Skills into multipliers. */
@@ -143,6 +158,7 @@ export function computeMods(character: OffspringCard, colony: Colony): Mods {
     stealthMod: (skill("stealthFlight") ? 0.65 : 1) * (trait("ghost") ? 0.6 : 1),
     windMod: (skill("drugResistance") ? 0.5 : 1) * (trait("tough") ? 0.7 : 1),
     sharpMod: 1 + (trait("sharp") ? 0.3 : 0),
+    senseMod: 1 + (skill("keenSense") ? 0.5 : 0),
   };
 }
 
@@ -168,16 +184,14 @@ export function finishNight(world: NightWorld, colony: Colony): NightResult {
     return { kind: "mated", sp, collapsed };
   }
   if (night.sex === "female") {
+    // she survived: she rejoins the colony pool and her Brood is drawn
+    returnToRoster(colony, character);
     const ceiling: SpotQuality = night.spotCeiling ?? "plain";
     const brood = drawBrood({ blood: night.blood, ceiling, rng });
     return { kind: "survived", brood, spotCeiling: ceiling };
   }
   // a male who never mated rejoins the roster
-  colony.roster.push(character);
+  returnToRoster(colony, character);
   return { kind: "maleSurvived" };
 }
 
-/** The picked Offspring joins the colony as the next playable mosquito. */
-export function pickBroodCard(colony: Colony, card: OffspringCard): void {
-  pickOffspring(colony, card);
-}

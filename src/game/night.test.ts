@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { FOUNDER_CARD, newColony, nextCharacter, pickOffspring, type Colony } from "../domain/colony.js";
+import {
+  FOUNDER_CARD,
+  newColony,
+  nextCharacter,
+  promoteOffspring,
+  returnToRoster,
+  type Colony,
+} from "../domain/colony.js";
 import { drawBrood } from "../domain/brood.js";
 import type { OffspringCard } from "../domain/types.js";
 import type { NightResult, NightWorld } from "./flow.js";
@@ -49,6 +56,26 @@ function layAtRoyalSpot(world: NightWorld): void {
   tickWorld(world, 0.1);
 }
 
+describe("input routing", () => {
+  it("runs the Night on the caller's live input object", () => {
+    const external = {
+      mouseDX: 0,
+      mouseDY: 0,
+      forward: false,
+      boost: false,
+      up: false,
+      down: false,
+      interactPressed: false,
+      interactHeld: false,
+      spacePressed: false,
+    };
+    const world = startNight(newColony(), FOUNDER_CARD, { rng: FAIR_RNG, input: external });
+    expect(inputOf(world)).toBe(external);
+    external.interactPressed = true;
+    expect(inputOf(world).interactPressed).toBe(true);
+  });
+});
+
 describe("a female Night", () => {
   it("pays blood and Energy while drinking, and the Host stirs", () => {
     const world = freshFemaleNight();
@@ -72,6 +99,7 @@ describe("a female Night", () => {
     const world = freshFemaleNight();
     feed(world, 4);
     layAtRoyalSpot(world);
+    expect(nightOf(world).voluntaryEnd).toBe(true);
     const result = finishNight(world, colonyOf(world));
     expect(result.kind).toBe("survived");
     if (result.kind === "survived") {
@@ -88,9 +116,10 @@ describe("a female Night", () => {
     const result = finishNight(world, colony);
     if (result.kind !== "survived") throw new Error("expected a survived night");
     const card = result.brood[0]!;
-    pickOffspring(colony, card);
+    promoteOffspring(colony, card);
     expect(colony.population).toBe(2);
-    expect(colony.roster).toContain(card);
+    // the picked card is now being played: it is not in the roster
+    expect(colony.roster).not.toContain(card);
   });
 });
 
@@ -111,7 +140,8 @@ describe("a male Night", () => {
   it("Nectar decays per plant; a won Courtship pays SP and spends the male", () => {
     const colony = newColony();
     // a second colony member, so the male's death doesn't collapse the dynasty
-    pickOffspring(colony, { id: "spare", name: "Aedes", sex: "female", rarity: "plain", trait: null });
+    colony.population = 2; // a second colony member so the male's death doesn't collapse
+    returnToRoster(colony, { id: "spare", name: "Aedes", sex: "female", rarity: "plain", trait: null });
     const world = startNight(colony, { ...FOUNDER_CARD, sex: "male" }, { rng: FAIR_RNG, worldScale: 1 });
     const player = playerId(world);
     const input = inputOf(world);
@@ -180,7 +210,7 @@ describe("colony sequencing", () => {
   it("plays the oldest rostered card next; an empty roster re-founds", () => {
     const colony = newColony();
     const card: OffspringCard = { id: "x", name: "Aedes", sex: "male", rarity: "plain", trait: null };
-    pickOffspring(colony, card);
+    returnToRoster(colony, card);
     expect(nextCharacter(colony)).toBe(card);
     expect(nextCharacter(colony)).toEqual(FOUNDER_CARD);
   });

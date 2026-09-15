@@ -8,12 +8,6 @@ export interface Pos {
   z: number;
 }
 
-export interface Vel {
-  x: number;
-  y: number;
-  z: number;
-}
-
 /** The played mosquito. Mods fold Skill + trait effects into plain multipliers. */
 export interface Mosquito {
   sex: Sex;

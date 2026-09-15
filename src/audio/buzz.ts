@@ -133,10 +133,6 @@ export class BuzzAudio {
     src.stop(t + 0.35);
   }
 
-  suspend(): void {
-    void this.ctx?.suspend();
-  }
-
   resume(): void {
     void this.ctx?.resume();
   }

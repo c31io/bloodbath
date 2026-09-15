@@ -6,9 +6,10 @@ import {
   killMosquito,
   newColony,
   nextCharacter,
-  pickOffspring,
+  promoteOffspring,
   purchaseSkill,
   advanceNight,
+  returnToRoster,
 } from "./colony.js";
 
 const card = (over: Partial<OffspringCard> = {}): OffspringCard => ({
@@ -33,10 +34,17 @@ describe("newColony", () => {
 });
 
 describe("population transitions", () => {
-  it("picking an Offspring adds one to Population and queues the card", () => {
+  it("a promoted Offspring adds one to Population without entering the roster", () => {
     const c = newColony();
-    pickOffspring(c, card());
+    promoteOffspring(c, card());
     expect(c.population).toBe(2);
+    expect(c.roster).toEqual([]);
+  });
+
+  it("a survivor returns to the roster without touching Population", () => {
+    const c = newColony();
+    returnToRoster(c, card());
+    expect(c.population).toBe(1);
     expect(c.roster.length).toBe(1);
   });
 
@@ -44,10 +52,10 @@ describe("population transitions", () => {
     const c = newColony();
     const first = card({ name: "Aedes" });
     const second = card({ name: "Culex" });
-    pickOffspring(c, first);
-    pickOffspring(c, second);
+    returnToRoster(c, first);
+    returnToRoster(c, second);
     expect(nextCharacter(c)).toBe(first);
-    expect(c.population).toBe(3);
+    expect(c.population).toBe(1);
     expect(c.roster).toEqual([second]);
   });
 
@@ -59,7 +67,7 @@ describe("population transitions", () => {
 
   it("a death spends one Population", () => {
     const c = newColony();
-    pickOffspring(c, card());
+    promoteOffspring(c, card());
     expect(killMosquito(c).collapsed).toBe(false);
     expect(c.population).toBe(1);
   });
@@ -68,7 +76,7 @@ describe("population transitions", () => {
     const c = newColony();
     gainSkillPoints(c, 5);
     purchaseSkill(c, { id: "stealthFlight", name: "Stealth Flight", cost: 3, description: "" });
-    pickOffspring(c, card());
+    promoteOffspring(c, card());
     killMosquito(c); // pop 2 -> 1
     const result = killMosquito(c); // pop 1 -> 0
     expect(result.collapsed).toBe(true);

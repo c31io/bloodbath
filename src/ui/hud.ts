@@ -1,3 +1,5 @@
+import { DAWN_SECONDS } from "../game/systems.js";
+import { resourcesOf } from "../game/flow.js";
 import type { Colony } from "../domain/colony.js";
 import type { HostState } from "../domain/suspicion.js";
 import type { World } from "../ecs/ecs.js";
@@ -87,10 +89,10 @@ export class Hud {
     const { world, colony } = state;
     const player = world.query("player")[0]!;
     const m = world.get<Mosquito>(player, "mosquito")!;
-    const night = world.res.night as { dawn: number; blood: number; courtship: { active: boolean; resonance: number } };
+    const night = resourcesOf(world).night;
 
     this.refs.meta.textContent = `Night ${colony.night} · Gen ${colony.generation} · Colony ${colony.population} · SP ${colony.sp}`;
-    this.refs.dawnFill.style.width = `${Math.max(0, Math.min(100, (night.dawn / 180) * 100))}%`;
+    this.refs.dawnFill.style.width = `${Math.max(0, Math.min(100, (night.dawn / DAWN_SECONDS) * 100))}%`;
     this.refs.energyFill.style.width = `${(m.energy / m.maxEnergy) * 100}%`;
     this.refs.bloodRow.style.display = m.sex === "female" ? "block" : "none";
     this.refs.bloodFill.style.width = `${Math.min(100, (night.blood / 2.5) * 100)}%`;
@@ -131,7 +133,7 @@ export class Tutorial {
     const player = world.query("player")[0]!;
     const m = world.get<Mosquito>(player, "mosquito")!;
     const p = world.get<Pos>(player, "pos")!;
-    const night = world.res.night as { sex: string; blood: number; laidEggs: boolean };
+    const night = resourcesOf(world).night;
     if (night.sex !== "female") {
       this.hud.hint("Males don't bite. Sip nectar to live, and find her.");
       return;

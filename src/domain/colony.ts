@@ -26,9 +26,13 @@ export function newColony(): Colony {
   return { population: 1, sp: 0, skills: new Set(), roster: [], generation: 1, night: 1 };
 }
 
-/** A picked Offspring survives to adulthood: +1 Population, queued to play. */
-export function pickOffspring(colony: Colony, card: OffspringCard): void {
+/** A picked Offspring becomes the played mosquito: +1 Population, never rostered. */
+export function promoteOffspring(colony: Colony, card: OffspringCard): void {
   colony.population++;
+}
+
+/** A mosquito who finished her Night alive rejoins the colony pool. */
+export function returnToRoster(colony: Colony, card: OffspringCard): void {
   colony.roster.push(card);
 }
 

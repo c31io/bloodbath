@@ -1,16 +1,17 @@
 import {
   newColony,
   nextCharacter,
+  promoteOffspring,
   purchaseSkill,
   advanceNight,
   type Colony,
 } from "./domain/colony.js";
-import { SKILL_CATALOG } from "./domain/skills.js";
-import type { SkillDef, SkillId } from "./domain/types.js";
+import { finishNight, resourcesOf, startNight, type NightWorld } from "./game/flow.js";
+import { SKILL_CATALOG, type SkillId } from "./domain/skills.js";
 import type { OffspringCard } from "./domain/types.js";
 import { BuzzAudio } from "./audio/buzz.js";
 import { clearSave, loadColony, saveColony } from "./persist.js";
-import { finishNight, pickBroodCard, resourcesOf, startNight, type NightWorld } from "./game/flow.js";
+import type { Mosquito, Pos } from "./game/components.js";
 import { attachInput } from "./game/input.js";
 import { buildHud, Hud, Tutorial } from "./ui/hud.js";
 import { hideOverlay, showBrood, showHow, showMenu, showNightEnd, showSkills } from "./ui/overlays.js";
@@ -54,10 +55,6 @@ attachInput(canvas, input, {
   },
 });
 
-function skillDef(id: SkillId): SkillDef {
-  return SKILL_CATALOG[id];
-}
-
 const menuActions = {
   onBegin: () => beginNight(nextCharacter(colony)),
   onSkills: () => showSkills(colony, onBuySkill, () => showMenu(colony, menuActions)),
@@ -70,7 +67,7 @@ const menuActions = {
 };
 
 function onBuySkill(id: SkillId): void {
-  if (purchaseSkill(colony, skillDef(id))) {
+  if (purchaseSkill(colony, SKILL_CATALOG[id])) {
     saveColony(colony);
     showSkills(colony, onBuySkill, () => showMenu(colony, menuActions));
   }
@@ -81,7 +78,8 @@ function beginNight(who: OffspringCard): void {
   audio.resume();
   character = who;
   hideOverlay();
-  world = startNight(colony, who, { rng: Math.random });
+  // the live DOM input object is routed straight into the simulation
+  world = startNight(colony, who, { rng: Math.random, input });
   view.bindWorld(world);
   screen = "playing";
 }
@@ -97,8 +95,7 @@ function endNight(): void {
   if (result.kind === "survived") {
     audio.chime();
     showBrood(result.brood, colony.night - 1, (card) => {
-      pickBroodCard(colony, card);
-      saveColony(colony);
+      promoteOffspring(colony, card);
       beginNight(card);
     });
   } else {
@@ -128,7 +125,11 @@ function frame(now: number): void {
     if (locked) {
       world.update(dt);
       const res = resourcesOf(world);
-      if (res.night.outcome !== "alive" || res.night.dawn <= 0) endNight();
+      if (res.night.sipped) {
+        audio.sip();
+        res.night.sipped = false;
+      }
+      if (res.night.outcome !== "alive" || res.night.dawn <= 0 || res.night.voluntaryEnd) endNight();
     }
     if (world) {
       view.sync(world, tools.channels);
@@ -142,8 +143,8 @@ function frame(now: number): void {
       });
       tutorial.update(world, colony, input);
       const player = world.query("player")[0]!;
-      const vel = world.get<{ x: number; y: number; z: number }>(player, "vel")!;
-      const m = world.get<{ feeding: boolean }>(player, "mosquito")!;
+      const vel = world.get<Pos>(player, "vel")!;
+      const m = world.get<Mosquito>(player, "mosquito")!;
       audio.wing(Math.hypot(vel.x, vel.y, vel.z), input.forward ? 1 : 0);
       audio.feeding(m.feeding);
       tools.update(world, inspectNX, inspectNY);

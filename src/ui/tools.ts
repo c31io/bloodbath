@@ -1,5 +1,5 @@
 import type { GameView, SenseChannels } from "../game/view.js";
-import type { NightWorld } from "../game/flow.js";
+import { resourcesOf, type NightWorld } from "../game/flow.js";
 
 const COMPONENT_NAMES = ["pos", "vel", "mosquito", "host", "hot", "eggSpot", "plant", "fan", "femalePath", "plume"];
 
@@ -39,9 +39,9 @@ export class Tools {
     const time = this.panel.querySelector<HTMLInputElement>("#tools-time")!;
     time.addEventListener("input", () => {
       const world = this.getWorld();
-      const scale = Number(time.value);
-      if (world) (world.res.night as { worldScale: number }).worldScale = scale;
-      this.panel.querySelector("#tools-time-val")!.textContent = `${scale.toFixed(2)}×`;
+      if (!world) return;
+      resourcesOf(world).night.worldScale = Number(time.value);
+      this.panel.querySelector("#tools-time-val")!.textContent = `${Number(time.value).toFixed(2)}×`;
     });
   }
 

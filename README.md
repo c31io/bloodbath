@@ -39,3 +39,5 @@ npm run build    # typecheck + production build
 ```
 
 Stack: TypeScript, [Three.js](https://threejs.org/), a small custom ECS (see [docs/adr/0001-threejs-typescript-custom-ecs.md](docs/adr/0001-threejs-typescript-custom-ecs.md)), zero backend. Domain glossary in [CONTEXT.md](CONTEXT.md).
+
+3D models: [Quaternius](https://quaternius.com) (CC0), via [Poly Pizza](https://poly.pizza/u/Quaternius).

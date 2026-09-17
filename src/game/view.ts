@@ -5,6 +5,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { LAYOUT, ROOM } from "./bedroom.js";
 import { windAt } from "./systems.js";
+import { loadProps } from "./props.js";
 import type { EggSpotC, Fan, Host, Mosquito, Pos } from "./components.js";
 import type { NightWorld } from "./flow.js";
 import { resourcesOf } from "./flow.js";
@@ -51,11 +52,15 @@ export class GameView {
   private camera: THREE.PerspectiveCamera;
   private composer: EffectComposer;
   private worldGroup = new THREE.Group();
-  private heatGroup = new THREE.Group();
-  private co2Group = new THREE.Group();
   private glow = glowTexture();
   private heatSprites = new Map<number, THREE.Sprite>();
+  private heatGroup = new THREE.Group();
+  private co2Group = new THREE.Group();
   private plumes: PlumeParticles[] = [];
+  private nightGroup = new THREE.Group();
+  private propsGroup = new THREE.Group();
+  private propReady = false;
+  private fallbacks: THREE.Object3D[] = [];
   private spotRings = new Map<number, THREE.Mesh>();
   private fanBlades: THREE.Group | null = null;
   private femaleMote: THREE.Sprite | null = null;
@@ -71,9 +76,14 @@ export class GameView {
     this.scene.fog = new THREE.FogExp2(0x05070f, 0.16);
     this.scene.background = new THREE.Color(0x03040a);
     this.scene.add(this.worldGroup, this.heatGroup, this.co2Group);
+    this.worldGroup.add(this.propsGroup, this.nightGroup);
 
     this.buildRoom();
     this.buildLights();
+    void loadProps(this.propsGroup).then(() => {
+      this.propReady = true;
+      for (const mesh of this.fallbacks) mesh.visible = false;
+    });
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
@@ -128,21 +138,10 @@ export class GameView {
     this.box(R.x * 2, R.h, 0.1, 0, R.h / 2, -R.z, this.mat(0x2c2540));
     this.box(R.x * 2, R.h, 0.1, 0, R.h / 2, R.z, this.mat(0x2c2540));
 
-    // moonlit window on the -z wall
-    const pane = this.box(1.6, 1.3, 0.04, 0, 1.6, -R.z + 0.08, this.mat(0x8ea6d8, { emissive: 0x2c3d66, ei: 0.9, rough: 0.4 }));
-    void pane;
+    // sill shelf for the windowsill plant model
+    this.box(1.1, 0.06, 0.32, 0, 1.38, -2.36, this.mat(0x35294a));
     this.box(0.06, 1.3, 0.06, -0.8, 1.6, -R.z + 0.1, this.mat(0x0c0a14));
     this.box(0.06, 1.3, 0.06, 0.8, 1.6, -R.z + 0.1, this.mat(0x0c0a14));
-
-    // bed under the sleeping human
-    this.box(2.1, 0.35, 1.3, LAYOUT.human.x - 0.1, 0.3, LAYOUT.human.z, this.mat(0x3a2f4e));
-    this.box(2.0, 0.16, 1.2, LAYOUT.human.x - 0.1, 0.55, LAYOUT.human.z, this.mat(0x514063));
-    this.box(0.5, 0.12, 0.7, LAYOUT.human.x - 0.9, 0.65, LAYOUT.human.z, this.mat(0xcfc3dd, { rough: 0.7 }));
-
-    // dresser, nightstand, desk, rug, door
-    this.box(1.0, 0.9, 0.5, LAYOUT.lamp.x, 0.45, LAYOUT.lamp.z + 0.15, this.mat(0x433657));
-    this.box(0.7, 0.75, 0.5, LAYOUT.phone.x, 0.37, LAYOUT.phone.z + 0.3, this.mat(0x433657));
-    this.box(1.2, 0.72, 0.6, LAYOUT.laptop.x, 0.36, LAYOUT.laptop.z + 0.2, this.mat(0x433657));
     this.box(1.0, 0.02, 1.4, -1.5, 0.02, 1.5, this.mat(0x5a3550, { rough: 1 }));
     this.box(0.05, 2.0, 0.9, R.x - 0.06, 1.0, 1.2, this.mat(0x35294a));
 
@@ -163,35 +162,53 @@ export class GameView {
     this.worldGroup.add(fanGroup);
   }
 
+  /** Drop every per-Night mesh: binding twice must not double the scene. */
+  private clearNight(): void {
+    this.nightGroup.clear();
+    this.fallbacks = [];
+    this.heatSprites.clear();
+    this.spotRings.clear();
+    this.plumes = [];
+    this.femaleMote = null;
+  }
+
+  /** Model replaces it once loaded; until then the primitive stays visible. */
+  private fallback(mesh: THREE.Object3D): THREE.Object3D {
+    mesh.visible = !this.propReady;
+    this.fallbacks.push(mesh);
+    return mesh;
+  }
+
   /** Bind live ECS entities to view meshes: hosts, hot decoys, spots, plants, plumes, female. */
   bindWorld(world: NightWorld): void {
+    this.clearNight();
     for (const id of world.query("host")) {
       const host = world.get<Host>(id, "host")!;
       const pos = world.get<Pos>(id, "pos")!;
       if (host.kind === "human") {
-        const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.9, 4, 8), this.mat(0xb98d7a, { rough: 0.8 }));
+        const body = this.fallback(new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.9, 4, 8), this.mat(0xb98d7a, { rough: 0.8 })));
         body.rotation.z = Math.PI / 2;
         body.position.set(pos.x - 0.15, pos.y + 0.08, pos.z);
         body.userData.entity = id;
-        this.worldGroup.add(body);
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), this.mat(0xc9a08c, { rough: 0.8 }));
+        this.nightGroup.add(body);
+        const head = this.fallback(new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), this.mat(0xc9a08c, { rough: 0.8 })));
         head.position.set(pos.x - 0.85, pos.y + 0.12, pos.z);
         head.userData.entity = id;
-        this.worldGroup.add(head);
+        this.nightGroup.add(head);
       } else {
-        const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.28, 4, 8), this.mat(0x8a6242, { rough: 1 }));
+        const body = this.fallback(new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.28, 4, 8), this.mat(0x8a6242, { rough: 1 })));
         body.rotation.z = Math.PI / 2;
         body.position.set(pos.x, pos.y + 0.09, pos.z);
         body.userData.entity = id;
-        this.worldGroup.add(body);
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), this.mat(0x9a7050, { rough: 1 }));
+        this.nightGroup.add(body);
+        const head = this.fallback(new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), this.mat(0x9a7050, { rough: 1 })));
         head.position.set(pos.x + 0.24, pos.y + 0.16, pos.z);
         head.userData.entity = id;
-        this.worldGroup.add(head);
+        this.nightGroup.add(head);
         for (const dz of [-0.04, 0.04]) {
-          const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.07, 6), this.mat(0x8a6242, { rough: 1 }));
+          const ear = this.fallback(new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.07, 6), this.mat(0x8a6242, { rough: 1 })));
           ear.position.set(pos.x + 0.26, pos.y + 0.26, pos.z + dz);
-          this.worldGroup.add(ear);
+          this.nightGroup.add(ear);
         }
       }
 
@@ -231,10 +248,10 @@ export class GameView {
       this.heatGroup.add(sprite);
       this.heatSprites.set(id, sprite);
 
-      const prop = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), this.mat(0xffb060, { emissive: 0xffb060, ei: 1.6 }));
+      const prop = this.fallback(new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), this.mat(0xffb060, { emissive: 0xffb060, ei: 1.6 })));
       prop.position.set(pos.x, pos.y, pos.z);
       prop.userData.entity = id;
-      this.worldGroup.add(prop);
+      this.nightGroup.add(prop);
     }
 
     const spotColor: Record<string, number> = { plain: 0x5a6a8a, ember: 0xd87a30, royal: 0x9a5ae0 };
@@ -254,23 +271,23 @@ export class GameView {
       ring.position.set(pos.x, pos.y + 0.02, pos.z);
       ring.rotation.x = Math.PI / 2;
       ring.userData.entity = id;
-      this.worldGroup.add(ring);
+      this.nightGroup.add(ring);
       this.spotRings.set(id, ring);
     }
 
     for (const id of world.query("plant")) {
       const pos = world.get<Pos>(id, "pos")!;
-      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.16, 10), this.mat(0x7a4a3a));
+      const pot = this.fallback(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.16, 10), this.mat(0x7a4a3a)));
       pot.position.set(pos.x, pos.y - 0.08, pos.z);
       pot.userData.entity = id;
-      this.worldGroup.add(pot);
+      this.nightGroup.add(pot);
       for (let i = 0; i < 5; i++) {
-        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.42, 5), this.mat(0x2f5a3a, { rough: 1 }));
+        const leaf = this.fallback(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.42, 5), this.mat(0x2f5a3a, { rough: 1 })));
         const a = (i / 5) * Math.PI * 2;
         leaf.position.set(pos.x + Math.cos(a) * 0.05, pos.y + 0.16, pos.z + Math.sin(a) * 0.05);
         leaf.rotation.set(Math.sin(a) * 0.4, 0, Math.cos(a) * 0.4);
         leaf.userData.entity = id;
-        this.worldGroup.add(leaf);
+        this.nightGroup.add(leaf);
       }
     }
 

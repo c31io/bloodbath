@@ -16,6 +16,7 @@ interface PropSpec {
 export const PROPS: Record<string, PropSpec> = {
   // The man is skinned: placement measures his posed bounds after an explicit
   // skeleton settlement (see loadProps) — a plain Box3 would see bind-pose vertices.
+  bed: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: Math.PI / 2 },
   man: { file: "man-a", pos: [2.15, 0.58, 0.4], size: 1.75, rotY: Math.PI / 2, rotZ: Math.PI / 2 },
   cat: { file: "cat-a", pos: [-1.5, 0, 1.5], size: 0.55 },
   nightstandLamp: { file: "night-stand", pos: [2.55, 0, -1.85], size: 0.75 },
@@ -28,16 +29,14 @@ export const PROPS: Record<string, PropSpec> = {
   bowl: { file: "bowl", pos: [-0.8, 0, 1.9], size: 0.24 },
   chalice: { file: "chalice", pos: [2.55, 0.74, -1.55], size: 0.26 },
 };
-
 /** Load every prop, normalize (grounded, bottom-center origin, uniform scale), place into group.
- *  Skinned models measure wrong until a rendered frame has updated their skeleton, so
- *  placement happens in a second phase after the RAF loop has drawn them once. */
+ *  Skinned models measure wrong until their skeleton is settled, so every wrapper is
+ *  settled explicitly before measuring. */
 export async function loadProps(group: THREE.Group): Promise<void> {
   const base = import.meta.env.BASE_URL;
   const draco = new DRACOLoader().setDecoderPath(`${base}models/draco/`);
   const loader = new GLTFLoader().setDRACOLoader(draco);
 
-  const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   const settle = (root: THREE.Object3D): void => {
     root.updateMatrixWorld(true);
     root.traverse((o) => {
@@ -46,6 +45,7 @@ export async function loadProps(group: THREE.Group): Promise<void> {
     });
   };
   const wrappers: Array<{ wrapper: THREE.Group; spec: PropSpec }> = [];
+
 
   await Promise.all(
     Object.entries(PROPS).map(async ([, spec]) => {
@@ -61,14 +61,12 @@ export async function loadProps(group: THREE.Group): Promise<void> {
     }),
   );
 
-  // skeletons only update for meshes the renderer draws; settle explicitly before measuring
-  await nextFrame();
-
   for (const { wrapper, spec } of wrappers) {
     settle(wrapper);
     const raw = new THREE.Box3().setFromObject(wrapper, true);
     const dims = raw.getSize(new THREE.Vector3());
-    wrapper.scale.setScalar(spec.size / (Math.max(dims.x, dims.y, dims.z) || 1));
+    const scale = spec.size / (Math.max(dims.x, dims.y, dims.z) || 1);
+    wrapper.scale.setScalar(scale);
     settle(wrapper);
     // ground the ROTATED, SCALED bounds: spec.pos is the footprint's bottom-center
     const box = new THREE.Box3().setFromObject(wrapper, true);

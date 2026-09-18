@@ -62,6 +62,28 @@ export interface FemalePath {
   t: number;
 }
 
+export const PLUME_COUNT = 90;
+
+/** A Host's CO2 trail: particle state integrated by the plume system,
+ *  uploaded to the view by the renderer. Cosmetic entropy only (Math.random) —
+ *  the game's rng stream stays untouched for reproducible Brood draws. */
+export interface Plume {
+  strength: number;
+  positions: Float32Array;
+  vel: Float32Array;
+  life: Float32Array;
+}
+
+export function makePlume(origin: Pos, strength: number): Plume {
+  const positions = new Float32Array(PLUME_COUNT * 3);
+  for (let i = 0; i < PLUME_COUNT; i++) {
+    positions[i * 3] = origin.x;
+    positions[i * 3 + 1] = -10; // parked below the floor until the first respawn
+    positions[i * 3 + 2] = origin.z;
+  }
+  return { strength, positions, vel: new Float32Array(PLUME_COUNT * 3), life: new Float32Array(PLUME_COUNT) };
+}
+
 /** Every named data bag the Bedroom and Night spawn, for debug inspection. */
 export const COMPONENT_NAMES = [
   "pos",

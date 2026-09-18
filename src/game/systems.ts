@@ -1,7 +1,7 @@
 import type { World } from "../ecs/ecs.js";
 import { drainEnergy, FEED_ENERGY_REGEN, sipNectar } from "../domain/resources.js";
 import { tickHost } from "../domain/suspicion.js";
-import type { EggSpotC, FemalePath, Fan, Host, Mosquito, Plant, Pos } from "./components.js";
+import { PLUME_COUNT, type EggSpotC, type FemalePath, type Fan, type Host, type Mosquito, type Plant, type Plume, type Pos } from "./components.js";
 import { ROOM } from "./bedroom.js";
 import {
   DAWN_SECONDS,
@@ -68,6 +68,33 @@ export function registerLogicSystems(world: NightWorld): void {
     }
   });
 
+
+  // CO2 trails advect with the air: buoyancy plus the shared wind field.
+  world.system("plumes", (w, dt) => {
+    const night = w.res.night;
+    if (frozen(night)) return;
+    for (const id of w.query("plume")) {
+      const plume = w.get<Plume>(id, "plume")!;
+      const src = w.get<Pos>(id, "pos")!;
+      for (let i = 0; i < PLUME_COUNT; i++) {
+        plume.life[i]! -= dt;
+        if (plume.life[i]! <= 0) {
+          plume.positions[i * 3] = src.x + (Math.random() - 0.5) * 0.06;
+          plume.positions[i * 3 + 1] = src.y + 0.05;
+          plume.positions[i * 3 + 2] = src.z + (Math.random() - 0.5) * 0.06;
+          plume.vel[i * 3] = (Math.random() - 0.5) * 0.05;
+          plume.vel[i * 3 + 1] = 0.12 + Math.random() * 0.06;
+          plume.vel[i * 3 + 2] = (Math.random() - 0.5) * 0.05;
+          plume.life[i] = 2.5 + Math.random() * 2;
+        }
+        const at = { x: plume.positions[i * 3]!, y: plume.positions[i * 3 + 1]!, z: plume.positions[i * 3 + 2]! };
+        const wind = windAt(w, at, 0.24);
+        plume.positions[i * 3] = at.x + (plume.vel[i * 3]! + wind.x) * dt;
+        plume.positions[i * 3 + 1] = at.y + plume.vel[i * 3 + 1]! * dt;
+        plume.positions[i * 3 + 2] = at.z + (plume.vel[i * 3 + 2]! + wind.z) * dt;
+      }
+    }
+  });
   world.system("femalePath", (w, dt) => {
     const { night } = w.res;
     if (frozen(night)) return;

@@ -6,7 +6,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { BEDROOM, ROOM } from "./bedroom.js";
 import { windAt } from "./systems.js";
 import { loadProps } from "./props.js";
-import type { EggSpotC, Fan, Host, Hot, Mosquito, Pos } from "./components.js";
+import type { EggSpotC, Fan, Host, Hot, Mosquito, Plume, Pos } from "./components.js";
 import type { NightWorld } from "./night.js";
 import { playerState } from "./night.js";
 
@@ -33,16 +33,11 @@ function glowTexture(): THREE.Texture {
   return tex;
 }
 
-interface PlumeParticles {
+interface PlumeView {
   points: THREE.Points;
-  positions: Float32Array;
-  vel: Float32Array;
-  life: Float32Array;
-  cursor: number;
   source: number;
 }
 
-const PLUME_COUNT = 90;
 const HEAT_RANGE = 3.2;
 const SPOT_REVEAL = 2.6;
 
@@ -56,7 +51,7 @@ export class GameView {
   private heatSprites = new Map<number, THREE.Sprite>();
   private heatGroup = new THREE.Group();
   private co2Group = new THREE.Group();
-  private plumes: PlumeParticles[] = [];
+  private plumes: PlumeView[] = [];
   private nightGroup = new THREE.Group();
   private propsGroup = new THREE.Group();
   private propReady = false;
@@ -66,7 +61,6 @@ export class GameView {
   private femaleMote: THREE.Sprite | null = null;
   private idleAngle = 0;
   private clock = new THREE.Clock();
-  private plumeGain = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -291,19 +285,12 @@ export class GameView {
       }
     }
 
-    // CO2 plumes: animals only
+    // CO2 plumes: animals only — the plumes system integrates, the view uploads
+    const gain = playerState(world)?.mosquito.senseMod ?? 1;
     for (const id of world.query("plume")) {
-      const pos = world.get<Pos>(id, "pos")!;
-      const positions = new Float32Array(PLUME_COUNT * 3);
-      const vel = new Float32Array(PLUME_COUNT * 3);
-      const life = new Float32Array(PLUME_COUNT);
-      for (let i = 0; i < PLUME_COUNT; i++) {
-        positions[i * 3] = pos.x;
-        positions[i * 3 + 1] = -10;
-        positions[i * 3 + 2] = pos.z;
-      }
+      const plume = world.get<Plume>(id, "plume")!;
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute("position", new THREE.BufferAttribute(plume.positions, 3));
       const points = new THREE.Points(
         geo,
         new THREE.PointsMaterial({
@@ -312,12 +299,12 @@ export class GameView {
           map: this.glow,
           blending: THREE.AdditiveBlending,
           transparent: true,
-          opacity: 0.5 * this.plumeGain,
+          opacity: 0.5 * gain,
           depthWrite: false,
         }),
       );
       this.co2Group.add(points);
-      this.plumes.push({ points, positions, vel, life, cursor: 0, source: id });
+      this.plumes.push({ points, source: id });
     }
 
     const female = world.query("femalePath")[0];
@@ -343,8 +330,6 @@ export class GameView {
     const t = performance.now() / 1000;
     const ref = world ? playerState(world) : null;
     if (ref && world) {
-      // Keen Sense sharpens the plume channel
-      this.plumeGain = world.res.colony.skills.has("keenSense") ? 1.6 : 1;
       const m = ref.mosquito;
       const p = ref.pos;
       this.camera.quaternion.setFromEuler(new THREE.Euler(m.pitch, m.yaw, m.roll, "YXZ"));
@@ -368,26 +353,8 @@ export class GameView {
         mat.opacity = used ? 0.05 : Math.max(0, 1 - d / SPOT_REVEAL) * (0.5 + Math.sin(t * 2.2) * 0.25);
       }
 
+      // the plumes system advances the arrays; the view only re-uploads them
       for (const plume of this.plumes) {
-        const src = world.get<Pos>(plume.source, "pos");
-        if (!src) continue;
-        for (let i = 0; i < PLUME_COUNT; i++) {
-          plume.life[i]! -= dt;
-          if (plume.life[i]! <= 0) {
-            plume.positions[i * 3] = src.x + (Math.random() - 0.5) * 0.06;
-            plume.positions[i * 3 + 1] = src.y + 0.05;
-            plume.positions[i * 3 + 2] = src.z + (Math.random() - 0.5) * 0.06;
-            plume.vel[i * 3] = (Math.random() - 0.5) * 0.05;
-            plume.vel[i * 3 + 1] = 0.12 + Math.random() * 0.06;
-            plume.vel[i * 3 + 2] = (Math.random() - 0.5) * 0.05;
-            plume.life[i] = 2.5 + Math.random() * 2;
-          }
-          const windPos = { x: plume.positions[i * 3]!, y: plume.positions[i * 3 + 1]!, z: plume.positions[i * 3 + 2]! };
-          const w = windAt(world, windPos, 0.24);
-          plume.positions[i * 3] = (plume.positions[i * 3] ?? 0) + (plume.vel[i * 3]! + w.x) * dt;
-          plume.positions[i * 3 + 1] = (plume.positions[i * 3 + 1] ?? 0) + plume.vel[i * 3 + 1]! * dt;
-          plume.positions[i * 3 + 2] = (plume.positions[i * 3 + 2] ?? 0) + (plume.vel[i * 3 + 2]! + w.z) * dt;
-        }
         plume.points.geometry.getAttribute("position").needsUpdate = true;
       }
 

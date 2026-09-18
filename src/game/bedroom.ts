@@ -1,7 +1,7 @@
 import type { World } from "../ecs/ecs.js";
 import { makePool } from "../domain/resources.js";
 import { createHostState } from "../domain/suspicion.js";
-import type { Pos } from "./components.js";
+import { makePlume, type Pos } from "./components.js";
 
 /** Bedroom shell: x in [-3,3], z in [-2.5,2.5], y in [0,3]. */
 export const ROOM = { minX: -3, maxX: 3, minZ: -2.5, maxZ: 2.5, height: 3 };
@@ -58,12 +58,12 @@ export function buildBedroom<R>(world: World<R>): void {
   spawn(BEDROOM.bed.anchor, [
     ["host", { kind: "human", pool: makePool(4.0), state: createHostState("human") }],
     ["hot", { strength: 0.9 }],
-    ["plume", { strength: 1.0 }],
+    ["plume", makePlume(BEDROOM.bed.anchor, 1.0)],
   ]);
   spawn(BEDROOM.cat.anchor, [
     ["host", { kind: "cat", pool: makePool(1.2), state: createHostState("cat") }],
     ["hot", { strength: 0.7 }],
-    ["plume", { strength: 0.6 }],
+    ["plume", makePlume(BEDROOM.cat.anchor, 0.6)],
   ]);
   spawn(BEDROOM.lamp.anchor, [["hot", { strength: 1.0 }]]);
   spawn(BEDROOM.phone.anchor, [["hot", { strength: 0.5 }]]);

@@ -9,7 +9,7 @@ import {
 import { DAWN_SECONDS } from "./systems.js";
 import type { OffspringCard, Sex, SpotQuality, TraitId } from "../domain/types.js";
 import { buildBedroom, LAYOUT } from "./bedroom.js";
-import type { Mosquito } from "./components.js";
+import type { Mosquito, Mods } from "./components.js";
 import { registerLogicSystems } from "./systems.js";
 
 /** Raw per-frame player intent. Edge fields are cleared at end of frame. */
@@ -86,7 +86,6 @@ export function startNight(colony: Colony, character: OffspringCard, opts: Start
   const mosquito: Mosquito = {
     sex: character.sex,
     energy: mods.maxEnergy,
-    blood: 0,
     landedOn: null,
     feeding: false,
     alive: true,
@@ -137,15 +136,6 @@ export function startNight(colony: Colony, character: OffspringCard, opts: Start
   return world;
 }
 
-export interface Mods {
-  maxEnergy: number;
-  speedMod: number;
-  feedRateMod: number;
-  stealthMod: number;
-  windMod: number;
-  sharpMod: number;
-  senseMod: number;
-}
 
 /** Fold the character's trait and the colony's Skills into multipliers. */
 export function computeMods(character: OffspringCard, colony: Colony): Mods {

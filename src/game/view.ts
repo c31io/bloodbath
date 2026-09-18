@@ -6,7 +6,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { LAYOUT, ROOM } from "./bedroom.js";
 import { windAt } from "./systems.js";
 import { loadProps } from "./props.js";
-import type { EggSpotC, Fan, Host, Mosquito, Pos } from "./components.js";
+import type { EggSpotC, Fan, Host, Hot, Mosquito, Pos } from "./components.js";
 import type { NightWorld } from "./flow.js";
 import { resourcesOf } from "./flow.js";
 
@@ -231,7 +231,7 @@ export class GameView {
 
     for (const id of world.query("hot")) {
       if (this.heatSprites.has(id)) continue;
-      const hot = world.get<{ strength: number }>(id, "hot")!;
+      const hot = world.get<Hot>(id, "hot")!;
       const pos = world.get<Pos>(id, "pos")!;
       const sprite = new THREE.Sprite(
         new THREE.SpriteMaterial({

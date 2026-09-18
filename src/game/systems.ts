@@ -216,7 +216,6 @@ export function registerLogicSystems(world: World): void {
       if (onThis) {
         const result = host.pool.drink({ dt, rate: DRINK_RATE * p.mosquito.feedRateMod });
         night.blood += result.blood;
-        p.mosquito.blood += result.blood;
         p.mosquito.energy = Math.min(p.mosquito.maxEnergy, p.mosquito.energy + FEED_ENERGY_REGEN * dt);
       }
       if (host.state.swatLanded && p && dist < SWAT_RADIUS) {

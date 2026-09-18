@@ -8,23 +8,28 @@ export interface Pos {
   z: number;
 }
 
-/** The played mosquito. Mods fold Skill + trait effects into plain multipliers. */
-export interface Mosquito {
+/** Mods fold Skill + trait effects into plain multipliers on the played mosquito. */
+export interface Mods {
+  maxEnergy: number;
+  speedMod: number;
+  feedRateMod: number;
+  stealthMod: number;
+  windMod: number;
+  sharpMod: number;
+  /** how strongly the CO2 plume channel reads (keenSense) */
+  senseMod: number;
+}
+
+/** The played mosquito. */
+export interface Mosquito extends Mods {
   sex: Sex;
   energy: number;
-  maxEnergy: number;
-  blood: number;
   landedOn: number | null;
   feeding: boolean;
   alive: boolean;
   yaw: number;
   pitch: number;
   roll: number;
-  speedMod: number;
-  feedRateMod: number;
-  stealthMod: number;
-  windMod: number;
-  sharpMod: number;
 }
 
 export interface Host {

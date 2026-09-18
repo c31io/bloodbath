@@ -29,8 +29,9 @@ const hud = new Hud(buildHud(hudRoot));
 const tutorial = new Tutorial((text) => hud.hint(text));
 
 let colony: Colony = loadColony() ?? newColony();
-let world: NightWorld | null = null;
 let character: OffspringCard | null = null;
+let seenSips = 0;
+let world: NightWorld | null = null;
 let screen: "menu" | "playing" | "between" = "menu";
 let inspectNX: number | null = null;
 let inspectNY: number | null = null;
@@ -82,6 +83,7 @@ function beginNight(who: OffspringCard): void {
   hideOverlay();
   // the live DOM input object is routed straight into the simulation
   world = startNight(colony, who, { rng: Math.random, input });
+  seenSips = 0;
   view.bindWorld(world);
   screen = "playing";
 }
@@ -126,9 +128,9 @@ function frame(now: number): void {
     hud.setLockHint(!locked);
     if (locked) {
       world.update(dt);
-      if (world.res.night.sipped) {
+      if (world.res.night.sips > seenSips) {
+        seenSips = world.res.night.sips;
         audio.sip();
-        world.res.night.sipped = false;
       }
       if (world.res.night.outcome !== "alive" || world.res.night.dawn <= 0 || world.res.night.voluntaryEnd) endNight();
     }

@@ -34,8 +34,8 @@ export interface NightState {
   laidEggs: boolean;
   /** set when the female lays: she may end the Night voluntarily */
   voluntaryEnd: boolean;
-  /** one-frame flag: the male sipped Nectar this tick (audio hook) */
-  sipped: boolean;
+  /** count of Nectar sips so far this Night (audio hooks compare against their own cursor) */
+  sips: number;
   spotCeiling: SpotQuality | null;
   brood: OffspringCard[] | null;
   courtship: CourtshipState;

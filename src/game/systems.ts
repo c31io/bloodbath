@@ -234,7 +234,7 @@ export function registerLogicSystems(world: NightWorld): void {
       if (Math.hypot(pp.x - p.pos.x, pp.y - p.pos.y, pp.z - p.pos.z) < SIP_RANGE) {
         const plant = w.get<Plant>(id, "plant")!;
         p.mosquito.energy = Math.min(p.mosquito.maxEnergy, p.mosquito.energy + sipNectar(plant));
-        night.sipped = true;
+        night.sips += 1;
         return;
       }
     }

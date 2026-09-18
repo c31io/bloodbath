@@ -74,6 +74,37 @@ describe("input routing", () => {
   });
 });
 
+describe("edge flags", () => {
+  it("clears every one-frame input edge at end of tick, whoever set it", () => {
+    const world = freshFemaleNight();
+    const input = world.res.input;
+    input.interactPressed = true;
+    input.spacePressed = true;
+    input.mouseDX = 42;
+    input.mouseDY = -7;
+    tickWorld(world, 0.05);
+    expect(input.interactPressed).toBe(false);
+    expect(input.spacePressed).toBe(false);
+    expect(input.mouseDX).toBe(0);
+    expect(input.mouseDY).toBe(0);
+  });
+
+  it("counts sips monotonically: the audio hook needs no clear", () => {
+    const world = freshFemaleNight();
+    feed(world, 1); // landed, not sipping
+    takeOff(world);
+    const plant = findFirst(world, "plant");
+    Object.assign(posOf(world, playerId(world)), posOf(world, plant));
+    const input = world.res.input;
+    input.interactPressed = true;
+    tickWorld(world, 0.1);
+    expect(world.res.night.sips).toBe(1);
+    input.interactPressed = true;
+    tickWorld(world, 0.1);
+    expect(world.res.night.sips).toBe(2);
+  });
+});
+
 describe("a female Night", () => {
   it("pays blood and Energy while drinking, and the Host stirs", () => {
     const world = freshFemaleNight();

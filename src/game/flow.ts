@@ -73,7 +73,7 @@ export function startNight(colony: Colony, character: OffspringCard, opts: Start
     blood: 0,
     laidEggs: false,
     voluntaryEnd: false,
-    sipped: false,
+    sips: 0,
     spotCeiling: null,
     brood: null,
     courtship: { active: false, resonance: 0, within: false, timeWithin: 0, timeTotal: 0 },

@@ -14,7 +14,9 @@ interface PropSpec {
 
 /** Quaternius (CC0) props via poly.pizza, standing in for the primitive boxes. */
 export const PROPS: Record<string, PropSpec> = {
-  bed: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: Math.PI / 2 },
+  // The man is skinned: placement measures his posed bounds after an explicit
+  // skeleton settlement (see loadProps) — a plain Box3 would see bind-pose vertices.
+  man: { file: "man-a", pos: [2.15, 0.58, 0.4], size: 1.75, rotY: Math.PI / 2, rotZ: Math.PI / 2 },
   cat: { file: "cat-a", pos: [-1.5, 0, 1.5], size: 0.55 },
   nightstandLamp: { file: "night-stand", pos: [2.55, 0, -1.85], size: 0.75 },
   lamp: { file: "light-desk", pos: [2.55, 0.74, -1.95], size: 0.45 },
@@ -27,38 +29,54 @@ export const PROPS: Record<string, PropSpec> = {
   chalice: { file: "chalice", pos: [2.55, 0.74, -1.55], size: 0.26 },
 };
 
-/** Load every prop, normalize (grounded, bottom-center origin, uniform scale), place into group. */
+/** Load every prop, normalize (grounded, bottom-center origin, uniform scale), place into group.
+ *  Skinned models measure wrong until a rendered frame has updated their skeleton, so
+ *  placement happens in a second phase after the RAF loop has drawn them once. */
 export async function loadProps(group: THREE.Group): Promise<void> {
   const base = import.meta.env.BASE_URL;
   const draco = new DRACOLoader().setDecoderPath(`${base}models/draco/`);
   const loader = new GLTFLoader().setDRACOLoader(draco);
+
+  const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const settle = (root: THREE.Object3D): void => {
+    root.updateMatrixWorld(true);
+    root.traverse((o) => {
+      const mesh = o as THREE.SkinnedMesh;
+      if (mesh.isSkinnedMesh) mesh.skeleton.update();
+    });
+  };
+  const wrappers: Array<{ wrapper: THREE.Group; spec: PropSpec }> = [];
+
   await Promise.all(
     Object.entries(PROPS).map(async ([, spec]) => {
       const gltf = await loader.loadAsync(`${base}models/${spec.file}.glb`);
-      const model = gltf.scene;
-      model.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(model);
-      const dims = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(dims.x, dims.y, dims.z) || 1;
-      const s = spec.size / maxDim;
-      // recenter x/z on origin and rest the model on y=0 before scaling
-      const center = box.getCenter(new THREE.Vector3());
-      model.position.set(-center.x, -box.min.y, -center.z);
       const wrapper = new THREE.Group();
-      wrapper.add(model);
-      wrapper.scale.setScalar(s);
-      wrapper.position.set(...spec.pos);
-      wrapper.rotation.y = spec.rotY ?? 0;
-      if (spec.rotZ !== undefined) {
-        const pivot = new THREE.Group();
-        pivot.add(wrapper);
-        pivot.rotation.z = spec.rotZ;
-        pivot.position.set(...spec.pos);
-        wrapper.position.set(0, 0, 0);
-        group.add(pivot);
-      } else {
-        group.add(wrapper);
-      }
+      wrapper.add(gltf.scene);
+      // ZYX so rotY (pose in plan) applies before rotZ (tip over)
+      wrapper.rotation.order = "ZYX";
+      wrapper.rotation.set(0, spec.rotY ?? 0, spec.rotZ ?? 0);
+      wrapper.visible = false;
+      group.add(wrapper);
+      wrappers.push({ wrapper, spec });
     }),
   );
+
+  // skeletons only update for meshes the renderer draws; settle explicitly before measuring
+  await nextFrame();
+
+  for (const { wrapper, spec } of wrappers) {
+    settle(wrapper);
+    const raw = new THREE.Box3().setFromObject(wrapper, true);
+    const dims = raw.getSize(new THREE.Vector3());
+    wrapper.scale.setScalar(spec.size / (Math.max(dims.x, dims.y, dims.z) || 1));
+    settle(wrapper);
+    // ground the ROTATED, SCALED bounds: spec.pos is the footprint's bottom-center
+    const box = new THREE.Box3().setFromObject(wrapper, true);
+    wrapper.position.set(
+      spec.pos[0] - (box.min.x + box.max.x) / 2,
+      spec.pos[1] - box.min.y,
+      spec.pos[2] - (box.min.z + box.max.z) / 2,
+    );
+    wrapper.visible = true;
+  }
 }

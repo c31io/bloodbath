@@ -1,80 +1,60 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { BEDROOM, type ModelSpec, type RoomObject } from "./bedroom.js";
 
-/** Placement spec: position is the model's bottom-center after normalization. */
-interface PropSpec {
-  file: string;
-  pos: [number, number, number];
-  /** Uniform scale so the model's longest dimension equals this many meters. */
-  size: number;
-  rotY?: number;
-  rotZ?: number;
+/** Skinned models measure wrong until their skeleton is settled — the renderer
+ *  only settles skeletons it actually draws, so do it explicitly. */
+function settle(root: THREE.Object3D): void {
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    const mesh = o as THREE.SkinnedMesh;
+    if (mesh.isSkinnedMesh) mesh.skeleton.update();
+  });
 }
 
-/** Quaternius (CC0) props via poly.pizza, standing in for the primitive boxes. */
-export const PROPS: Record<string, PropSpec> = {
-  // The man is skinned: placement measures his posed bounds after an explicit
-  // skeleton settlement (see loadProps) — a plain Box3 would see bind-pose vertices.
-  bed: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: Math.PI / 2 },
-  man: { file: "man-a", pos: [2.15, 0.58, 0.4], size: 1.75, rotY: Math.PI / 2, rotZ: Math.PI / 2 },
-  cat: { file: "cat-a", pos: [-1.5, 0, 1.5], size: 0.55 },
-  nightstandLamp: { file: "night-stand", pos: [2.55, 0, -1.85], size: 0.75 },
-  lamp: { file: "light-desk", pos: [2.55, 0.74, -1.95], size: 0.45 },
-  phone: { file: "phone", pos: [0.7, 0.75, 1.15], size: 0.16 },
-  desk: { file: "desk", pos: [-2.4, 0, -1.3], size: 1.25 },
-  computer: { file: "computer", pos: [-2.4, 0.72, -1.5], size: 0.5 },
-  plantBig: { file: "plant-big", pos: [-2.6, 0, -2.0], size: 0.95 },
-  plant: { file: "plant", pos: [0, 1.43, -2.42], size: 0.45 },
-  bowl: { file: "bowl", pos: [-0.8, 0, 1.9], size: 0.24 },
-  chalice: { file: "chalice", pos: [2.55, 0.74, -1.55], size: 0.26 },
-};
-/** Load every prop, normalize (grounded, bottom-center origin, uniform scale), place into group.
- *  Skinned models measure wrong until their skeleton is settled, so every wrapper is
- *  settled explicitly before measuring. */
+/** Normalize a loaded model: uniform-scale its longest dimension to spec.size,
+ *  then ground the ROTATED, SCALED bounds so spec.pos is the bottom-center. */
+export function placeModel(wrapper: THREE.Object3D, spec: ModelSpec): void {
+  settle(wrapper);
+  const raw = new THREE.Box3().setFromObject(wrapper, true);
+  const dims = raw.getSize(new THREE.Vector3());
+  wrapper.scale.setScalar(spec.size / (Math.max(dims.x, dims.y, dims.z) || 1));
+  settle(wrapper);
+  const box = new THREE.Box3().setFromObject(wrapper, true);
+  wrapper.position.set(
+    spec.pos[0] - (box.min.x + box.max.x) / 2,
+    spec.pos[1] - box.min.y,
+    spec.pos[2] - (box.min.z + box.max.z) / 2,
+  );
+}
+
+/** Load every model named in the BEDROOM table and place it at its spec. */
 export async function loadProps(group: THREE.Group): Promise<void> {
   const base = import.meta.env.BASE_URL;
   const draco = new DRACOLoader().setDecoderPath(`${base}models/draco/`);
   const loader = new GLTFLoader().setDRACOLoader(draco);
 
-  const settle = (root: THREE.Object3D): void => {
-    root.updateMatrixWorld(true);
-    root.traverse((o) => {
-      const mesh = o as THREE.SkinnedMesh;
-      if (mesh.isSkinnedMesh) mesh.skeleton.update();
-    });
-  };
-  const wrappers: Array<{ wrapper: THREE.Group; spec: PropSpec }> = [];
-
+  const wrappers: Array<{ wrapper: THREE.Group; model: ModelSpec }> = [];
 
   await Promise.all(
-    Object.entries(PROPS).map(async ([, spec]) => {
-      const gltf = await loader.loadAsync(`${base}models/${spec.file}.glb`);
+    (Object.values(BEDROOM) as RoomObject[]).map(async (obj) => {
+      const model = obj.model;
+      if (!model) return;
+      const gltf = await loader.loadAsync(`${base}models/${model.file}.glb`);
       const wrapper = new THREE.Group();
       wrapper.add(gltf.scene);
       // ZYX so rotY (pose in plan) applies before rotZ (tip over)
       wrapper.rotation.order = "ZYX";
-      wrapper.rotation.set(0, spec.rotY ?? 0, spec.rotZ ?? 0);
+      wrapper.rotation.set(0, model.rotY ?? 0, model.rotZ ?? 0);
       wrapper.visible = false;
       group.add(wrapper);
-      wrappers.push({ wrapper, spec });
+      wrappers.push({ wrapper, model });
     }),
   );
 
-  for (const { wrapper, spec } of wrappers) {
-    settle(wrapper);
-    const raw = new THREE.Box3().setFromObject(wrapper, true);
-    const dims = raw.getSize(new THREE.Vector3());
-    const scale = spec.size / (Math.max(dims.x, dims.y, dims.z) || 1);
-    wrapper.scale.setScalar(scale);
-    settle(wrapper);
-    // ground the ROTATED, SCALED bounds: spec.pos is the footprint's bottom-center
-    const box = new THREE.Box3().setFromObject(wrapper, true);
-    wrapper.position.set(
-      spec.pos[0] - (box.min.x + box.max.x) / 2,
-      spec.pos[1] - box.min.y,
-      spec.pos[2] - (box.min.z + box.max.z) / 2,
-    );
+  for (const { wrapper, model } of wrappers) {
+    placeModel(wrapper, model);
     wrapper.visible = true;
   }
 }

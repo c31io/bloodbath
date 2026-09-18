@@ -7,7 +7,7 @@ import {
   type Colony,
 } from "../domain/colony.js";
 import type { OffspringCard, SpotQuality, TraitId } from "../domain/types.js";
-import { buildBedroom, LAYOUT } from "./bedroom.js";
+import { BEDROOM, buildBedroom } from "./bedroom.js";
 import type { Mosquito, Mods } from "./components.js";
 import { registerLogicSystems } from "./systems.js";
 import {
@@ -52,7 +52,7 @@ export function startNight(colony: Colony, character: OffspringCard, opts: Start
 
   if (character.sex === "male") {
     const female = world.entity();
-    world.add(female, "pos", { ...LAYOUT.femaleCenter });
+    world.add(female, "pos", { ...BEDROOM.femaleCenter.anchor });
     world.add(female, "femalePath", { t: 0 });
     world.add(female, "plume", { strength: 0.8 });
   }

@@ -3,7 +3,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { LAYOUT, ROOM } from "./bedroom.js";
+import { BEDROOM, ROOM } from "./bedroom.js";
 import { windAt } from "./systems.js";
 import { loadProps } from "./props.js";
 import type { EggSpotC, Fan, Host, Hot, Mosquito, Pos } from "./components.js";
@@ -122,10 +122,10 @@ export class GameView {
     moon.position.set(0, 4, -6);
     this.scene.add(moon);
     const lamp = new THREE.PointLight(0xffa050, 9, 6, 2);
-    lamp.position.set(LAYOUT.lamp.x, LAYOUT.lamp.y, LAYOUT.lamp.z);
+    lamp.position.set(BEDROOM.lamp.anchor.x, BEDROOM.lamp.anchor.y, BEDROOM.lamp.anchor.z);
     this.scene.add(lamp);
     const laptopGlow = new THREE.PointLight(0x9fd0ff, 2.2, 2.2, 2);
-    laptopGlow.position.set(LAYOUT.laptop.x, LAYOUT.laptop.y + 0.1, LAYOUT.laptop.z);
+    laptopGlow.position.set(BEDROOM.laptop.anchor.x, BEDROOM.laptop.anchor.y + 0.1, BEDROOM.laptop.anchor.z);
     this.scene.add(laptopGlow);
   }
 
@@ -147,7 +147,7 @@ export class GameView {
 
     // ceiling fan: hub + three blades, spun by the ECS angle each frame
     const fanGroup = new THREE.Group();
-    fanGroup.position.set(LAYOUT.fan.x, LAYOUT.fan.y, LAYOUT.fan.z);
+    fanGroup.position.set(BEDROOM.fan.anchor.x, BEDROOM.fan.anchor.y, BEDROOM.fan.anchor.z);
     fanGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.1, 12), this.mat(0x151221)));
     for (let i = 0; i < 3; i++) {
       const blade = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.015, 0.16), this.mat(0x241d38, { rough: 0.6 }));

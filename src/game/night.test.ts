@@ -9,21 +9,19 @@ import {
 } from "../domain/colony.js";
 import { drawBrood } from "../domain/brood.js";
 import type { OffspringCard } from "../domain/types.js";
-import type { NightResult, NightWorld } from "./flow.js";
+import type { NightResult } from "./flow.js";
+import type { NightWorld } from "./night.js";
 import { finishNight, startNight } from "./flow.js";
 import {
-  colonyOf,
   eggSpotWithQuality,
   findFirst,
   hostOfKind,
   hostStateOf,
-  inputOf,
   mosquitoOf,
-  nightOf,
   playerId,
   posOf,
   tickWorld,
-} from "./harness.js";
+} from "./night.js";
 
 const FAIR_RNG = () => 0.5;
 function freshFemaleNight(colony: Colony = newColony()): NightWorld {
@@ -35,24 +33,24 @@ function feed(world: NightWorld, seconds: number, held = true): void {
   const player = playerId(world);
   const human = hostOfKind(world, "human");
   Object.assign(posOf(world, player), posOf(world, human));
-  inputOf(world).interactPressed = true; // land
+  world.res.input.interactPressed = true; // land
   tickWorld(world, 0.05);
-  inputOf(world).interactHeld = held; // drink while held
+  world.res.input.interactHeld = held; // drink while held
   tickWorld(world, seconds);
 }
 
 function takeOff(world: NightWorld): void {
-  inputOf(world).interactHeld = false;
-  inputOf(world).spacePressed = true;
+  world.res.input.interactHeld = false;
+  world.res.input.spacePressed = true;
   tickWorld(world, 0.05);
-  inputOf(world).spacePressed = false;
+  world.res.input.spacePressed = false;
 }
 
 function layAtRoyalSpot(world: NightWorld): void {
   takeOff(world);
   const player = playerId(world);
   Object.assign(posOf(world, player), posOf(world, eggSpotWithQuality(world, "royal")));
-  inputOf(world).interactPressed = true;
+  world.res.input.interactPressed = true;
   tickWorld(world, 0.1);
 }
 
@@ -70,9 +68,9 @@ describe("input routing", () => {
       spacePressed: false,
     };
     const world = startNight(newColony(), FOUNDER_CARD, { rng: FAIR_RNG, input: external });
-    expect(inputOf(world)).toBe(external);
+    expect(world.res.input).toBe(external);
     external.interactPressed = true;
-    expect(inputOf(world).interactPressed).toBe(true);
+    expect(world.res.input.interactPressed).toBe(true);
   });
 });
 
@@ -80,7 +78,7 @@ describe("a female Night", () => {
   it("pays blood and Energy while drinking, and the Host stirs", () => {
     const world = freshFemaleNight();
     feed(world, 2);
-    expect(nightOf(world).blood).toBeCloseTo(0.7);
+    expect(world.res.night.blood).toBeCloseTo(0.7);
     expect(mosquitoOf(world, playerId(world)).energy).toBeGreaterThan(96);
     expect(hostStateOf(world, hostOfKind(world, "human")).suspicion).toBeGreaterThan(5);
   });
@@ -99,8 +97,8 @@ describe("a female Night", () => {
     const world = freshFemaleNight();
     feed(world, 4);
     layAtRoyalSpot(world);
-    expect(nightOf(world).voluntaryEnd).toBe(true);
-    const result = finishNight(world, colonyOf(world));
+    expect(world.res.night.voluntaryEnd).toBe(true);
+    const result = finishNight(world, world.res.colony);
     expect(result.kind).toBe("survived");
     if (result.kind === "survived") {
       expect(result.brood.length).toBeGreaterThanOrEqual(2);
@@ -110,7 +108,7 @@ describe("a female Night", () => {
 
   it("picking a card grows the colony", () => {
     const world = freshFemaleNight();
-    const colony = colonyOf(world);
+    const colony = world.res.colony;
     feed(world, 4);
     layAtRoyalSpot(world);
     const result = finishNight(world, colony);
@@ -126,7 +124,7 @@ describe("a female Night", () => {
 describe("a greedy feeder", () => {
   it("gets swatted; with no other colony member the dynasty collapses", () => {
     const world = freshFemaleNight();
-    const colony = colonyOf(world);
+    const colony = world.res.colony;
     feed(world, 30); // 6/s rise, never backs off
     const result = finishNight(world, colony);
     expect(result.kind).toBe("swatted");
@@ -144,7 +142,7 @@ describe("a male Night", () => {
     returnToRoster(colony, { id: "spare", name: "Aedes", sex: "female", rarity: "plain", trait: null });
     const world = startNight(colony, { ...FOUNDER_CARD, sex: "male" }, { rng: FAIR_RNG, worldScale: 1 });
     const player = playerId(world);
-    const input = inputOf(world);
+    const input = world.res.input;
 
     Object.assign(posOf(world, player), posOf(world, findFirst(world, "plant")));
     const gains: number[] = [];
@@ -164,11 +162,11 @@ describe("a male Night", () => {
     // courtship: ride the female's path, resonance fills to 100
     mosquitoOf(world, player).energy = 100;
     const female = findFirst(world, "femalePath");
-    for (let i = 0; i < 600 && nightOf(world).courtship.resonance < 100; i++) {
+    for (let i = 0; i < 600 && world.res.night.courtship.resonance < 100; i++) {
       Object.assign(posOf(world, player), posOf(world, female));
       tickWorld(world, 0.1);
     }
-    expect(nightOf(world).courtship.resonance).toBeGreaterThanOrEqual(100);
+    expect(world.res.night.courtship.resonance).toBeGreaterThanOrEqual(100);
 
     const spBefore = colony.sp;
     const result = finishNight(world, colony);
@@ -182,7 +180,7 @@ describe("a male Night", () => {
 describe("starvation", () => {
   it("kills a mosquito whose Energy stays at zero", () => {
     const world = freshFemaleNight();
-    const colony = colonyOf(world);
+    const colony = world.res.colony;
     mosquitoOf(world, playerId(world)).energy = 0.01;
     tickWorld(world, 5);
     const result = finishNight(world, colony);
@@ -195,8 +193,8 @@ describe("starvation", () => {
 describe("dawn", () => {
   it("forces the Night to end, drawing a plain-ceiling Brood", () => {
     const world = freshFemaleNight();
-    const colony = colonyOf(world);
-    for (let i = 0; i < 40 && nightOf(world).dawn > 0; i++) tickWorld(world, 10);
+    const colony = world.res.colony;
+    for (let i = 0; i < 40 && world.res.night.dawn > 0; i++) tickWorld(world, 10);
     const result = finishNight(world, colony);
     expect(result.kind).toBe("survived");
     if (result.kind === "survived") {

@@ -3,11 +3,15 @@ import { drainEnergy, FEED_ENERGY_REGEN, sipNectar } from "../domain/resources.j
 import { tickHost } from "../domain/suspicion.js";
 import type { EggSpotC, FemalePath, Fan, Host, Mosquito, Plant, Pos } from "./components.js";
 import { ROOM } from "./bedroom.js";
-import { resourcesOf } from "./flow.js";
-import type { NightInput, NightState } from "./flow.js";
+import {
+  DAWN_SECONDS,
+  playerState,
+  type NightInput,
+  type NightState,
+  type NightWorld,
+} from "./night.js";
 
 /** Tuning constants for one Night. */
-export const DAWN_SECONDS = 180;
 export const PASSIVE_DRAIN_FEMALE = 0.35;
 export const PASSIVE_DRAIN_MALE = 0.5;
 export const FLIGHT_DRAIN = 2.0;
@@ -26,19 +30,12 @@ function frozen(night: NightState): boolean {
   return night.dawn <= 0 || night.outcome !== "alive";
 }
 
-function playerState(world: World): { player: number; mosquito: Mosquito; pos: Pos } | null {
-  const player = world.query("player")[0];
-  if (player === undefined) return null;
-  const mosquito = world.get<Mosquito>(player, "mosquito")!;
-  if (!mosquito.alive) return null;
-  return { player, mosquito, pos: world.get<Pos>(player, "pos")! };
-}
 
 /**
  * Shared wind field: the fan's blast inside its arc below the hub, else a
  * faint room drift. Used by flight, CO2 plumes, and view advection.
  */
-export function windAt(world: World, pos: Pos, windMod: number): { x: number; y: number; z: number } {
+export function windAt(world: NightWorld, pos: Pos, windMod: number): { x: number; y: number; z: number } {
   for (const id of world.query("fan")) {
     const fan = world.get<Fan>(id, "fan")!;
     const fp = world.get<Pos>(id, "pos")!;
@@ -60,11 +57,10 @@ function drainOrStarve(mosquito: Mosquito, night: NightState, dt: number, rate: 
     night.outcome = "starved";
   }
 }
-
 /** Register the headless-safe logic systems, in tick order. */
-export function registerLogicSystems(world: World): void {
+export function registerLogicSystems(world: NightWorld): void {
   world.system("fan", (w, dt) => {
-    const { night } = resourcesOf(w);
+    const { night } = w.res;
     if (frozen(night)) return;
     for (const id of w.query("fan")) {
       const fan = w.get<Fan>(id, "fan")!;
@@ -73,7 +69,7 @@ export function registerLogicSystems(world: World): void {
   });
 
   world.system("femalePath", (w, dt) => {
-    const { night } = resourcesOf(w);
+    const { night } = w.res;
     if (frozen(night)) return;
     for (const id of w.query("femalePath")) {
       const path = w.get<FemalePath>(id, "femalePath")!;
@@ -86,7 +82,7 @@ export function registerLogicSystems(world: World): void {
   });
 
   world.system("flight", (w, dt) => {
-    const res = resourcesOf(w);
+    const res = w.res;
     const { input, night } = res;
     const p = playerState(w);
     if (!p) return;
@@ -170,7 +166,7 @@ export function registerLogicSystems(world: World): void {
   });
 
   world.system("courtship", (w, dt) => {
-    const { night } = resourcesOf(w);
+    const { night } = w.res;
     if (frozen(night)) return;
     const p = playerState(w);
     if (!p || p.mosquito.sex !== "male") return;
@@ -199,7 +195,7 @@ export function registerLogicSystems(world: World): void {
   });
 
   world.system("hosts", (w, dt) => {
-    const { night } = resourcesOf(w);
+    const { night } = w.res;
     if (frozen(night)) return;
     const p = playerState(w);
     for (const id of w.query("host")) {
@@ -226,7 +222,7 @@ export function registerLogicSystems(world: World): void {
   });
 
   world.system("interactions", (w, dt) => {
-    const { input, night } = resourcesOf(w);
+    const { input, night } = w.res;
     if (frozen(night)) return;
     const p = playerState(w);
     if (!p || !input.interactPressed) return;
@@ -259,12 +255,12 @@ export function registerLogicSystems(world: World): void {
   });
 
   world.system("nightTimer", (w, dt) => {
-    const { night } = resourcesOf(w);
+    const { night } = w.res;
     if (night.dawn > 0 && night.outcome === "alive") night.dawn -= dt;
   });
 
   world.system("edgeReset", (w) => {
-    const { input } = resourcesOf(w);
+    const { input } = w.res;
     input.interactPressed = false;
     input.spacePressed = false;
     input.mouseDX = 0;
@@ -272,4 +268,3 @@ export function registerLogicSystems(world: World): void {
   });
 }
 
-export type { NightInput };

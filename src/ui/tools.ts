@@ -1,7 +1,6 @@
 import type { GameView, SenseChannels } from "../game/view.js";
-import { resourcesOf, type NightWorld } from "../game/flow.js";
-
-const COMPONENT_NAMES = ["pos", "vel", "mosquito", "host", "hot", "eggSpot", "plant", "fan", "femalePath", "plume"];
+import { setWorldScale, type NightWorld } from "../game/night.js";
+import { COMPONENT_NAMES } from "../game/components.js";
 
 /** Developer instruments: sense channel isolation, Mosquito Time dial, entity inspector. */
 export class Tools {
@@ -40,7 +39,7 @@ export class Tools {
     time.addEventListener("input", () => {
       const world = this.getWorld();
       if (!world) return;
-      resourcesOf(world).night.worldScale = Number(time.value);
+      setWorldScale(world, Number(time.value));
       this.panel.querySelector("#tools-time-val")!.textContent = `${Number(time.value).toFixed(2)}×`;
     });
   }

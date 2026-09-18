@@ -1,21 +1,23 @@
-export type SystemFn = (world: World, dt: number) => void;
+export type SystemFn<R = unknown> = (world: World<R>, dt: number) => void;
 
-interface System {
+interface System<R = unknown> {
   name: string;
-  fn: SystemFn;
+  fn: SystemFn<R>;
 }
 
 /**
  * Minimal entity-component-system world. Components are named data bags;
  * queries return entities holding every requested component. Resources are
- * singletons (time, input, wind) kept out of the entity space.
+ * singletons (time, input, wind) kept out of the entity space, typed by `R`.
  */
-export class World {
+export class World<R = Record<string, unknown>> {
   private nextId = 1;
   private entities = new Map<number, Set<string>>();
   private stores = new Map<string, Map<number, object>>();
-  private systems: System[] = [];
-  readonly res: Record<string, unknown> = {};
+  private systems: System<R>[] = [];
+  /** Populated by the composition module right after construction. */
+  readonly res: R = {} as R;
+
 
   entity(): number {
     const id = this.nextId++;
@@ -74,7 +76,7 @@ export class World {
     return out;
   }
 
-  system(name: string, fn: SystemFn): void {
+  system(name: string, fn: SystemFn<R>): void {
     this.drop(name);
     this.systems.push({ name, fn });
   }

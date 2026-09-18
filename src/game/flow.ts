@@ -6,65 +6,18 @@ import {
   returnToRoster,
   type Colony,
 } from "../domain/colony.js";
-import { DAWN_SECONDS } from "./systems.js";
-import type { OffspringCard, Sex, SpotQuality, TraitId } from "../domain/types.js";
+import type { OffspringCard, SpotQuality, TraitId } from "../domain/types.js";
 import { buildBedroom, LAYOUT } from "./bedroom.js";
 import type { Mosquito, Mods } from "./components.js";
 import { registerLogicSystems } from "./systems.js";
+import {
+  DAWN_SECONDS,
+  type NightInput,
+  type NightResources,
+  type NightState,
+  type NightWorld,
+} from "./night.js";
 
-/** Raw per-frame player intent. Edge fields are cleared at end of frame. */
-export interface NightInput {
-  mouseDX: number;
-  mouseDY: number;
-  forward: boolean;
-  boost: boolean;
-  up: boolean;
-  down: boolean;
-  interactPressed: boolean;
-  interactHeld: boolean;
-  spacePressed: boolean;
-}
-
-export interface CourtshipState {
-  active: boolean;
-  resonance: number;
-  within: boolean;
-  timeWithin: number;
-  timeTotal: number;
-}
-
-export interface NightState {
-  sex: Sex;
-  blood: number;
-  laidEggs: boolean;
-  /** set when the female lays: she may end the Night voluntarily */
-  voluntaryEnd: boolean;
-  /** one-frame flag: the male sipped Nectar this tick (audio hook) */
-  sipped: boolean;
-  spotCeiling: SpotQuality | null;
-  brood: OffspringCard[] | null;
-  courtship: CourtshipState;
-  /** alive | killed by Swat | starved | spent on a won Courtship */
-  outcome: "alive" | "swatted" | "starved" | "mated";
-  dawn: number;
-  /** Mosquito Time: how slow the world moves relative to the player. */
-  worldScale: number;
-}
-
-export interface NightResources {
-  input: NightInput;
-  night: NightState;
-  colony: Colony;
-  rng: () => number;
-  character: OffspringCard;
-}
-
-export type NightWorld = World;
-
-/** The one controlled boundary cast: every resource under `res` is ours. */
-export function resourcesOf(world: NightWorld): NightResources {
-  return world.res as unknown as NightResources;
-}
 
 export interface StartNightOpts {
   rng: () => number;
@@ -76,7 +29,7 @@ export interface StartNightOpts {
 
 /** Build a fresh Night world: Bedroom, playable mosquito, female NPC for males. */
 export function startNight(colony: Colony, character: OffspringCard, opts: StartNightOpts): NightWorld {
-  const world = new World();
+  const world = new World<NightResources>();
   buildBedroom(world);
 
   const mods = computeMods(character, colony);
@@ -161,7 +114,7 @@ export type NightResult =
 
 /** Close the Night and apply every colony consequence. */
 export function finishNight(world: NightWorld, colony: Colony): NightResult {
-  const { night, rng, character } = resourcesOf(world);
+  const { night, rng, character } = world.res;
   if (night.outcome === "swatted" || night.outcome === "starved") {
     const { collapsed } = killMosquito(colony);
     return { kind: night.outcome, collapsed };

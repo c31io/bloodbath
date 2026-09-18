@@ -1,10 +1,7 @@
-import { DAWN_SECONDS } from "../game/systems.js";
-import { resourcesOf } from "../game/flow.js";
+import { DAWN_SECONDS, playerState, type NightWorld } from "../game/night.js";
 import type { Colony } from "../domain/colony.js";
 import type { HostState } from "../domain/suspicion.js";
-import type { World } from "../ecs/ecs.js";
-import type { Host, Mosquito, Pos } from "../game/components.js";
-import type { NightWorld } from "../game/flow.js";
+import type { Host, Mosquito } from "../game/components.js";
 
 export interface HudRefs {
   root: HTMLDivElement;
@@ -87,9 +84,10 @@ export class Hud {
 
   update(state: HudState): void {
     const { world, colony } = state;
-    const player = world.query("player")[0]!;
-    const m = world.get<Mosquito>(player, "mosquito")!;
-    const night = resourcesOf(world).night;
+    const p = playerState(world);
+    if (!p) return;
+    const m = p.mosquito;
+    const night = world.res.night;
 
     this.refs.meta.textContent = `Night ${colony.night} · Gen ${colony.generation} · Colony ${colony.population} · SP ${colony.sp}`;
     this.refs.dawnFill.style.width = `${Math.max(0, Math.min(100, (night.dawn / DAWN_SECONDS) * 100))}%`;
@@ -118,45 +116,3 @@ export class Hud {
   }
 }
 
-/** Diegetic Night-1 tutorial: one line at a time, staged by what the player does. */
-export class Tutorial {
-  private moved = 0;
-  private stage = 0;
-
-  constructor(private hud: Hud) {}
-
-  update(world: NightWorld, colony: Colony, input: { mouseDX: number; mouseDY: number }): void {
-    if (colony.night !== 1 || colony.generation !== 1) {
-      this.hud.hint("");
-      return;
-    }
-    const player = world.query("player")[0]!;
-    const m = world.get<Mosquito>(player, "mosquito")!;
-    const p = world.get<Pos>(player, "pos")!;
-    const night = resourcesOf(world).night;
-    if (night.sex !== "female") {
-      this.hud.hint("Males don't bite. Sip nectar to live, and find her.");
-      return;
-    }
-    this.moved += Math.abs(input.mouseDX) + Math.abs(input.mouseDY);
-    const lines = [
-      "Drift on the night air. Move the mouse.",
-      "A plume of breath threads the dark — follow it.",
-      "Warmth pools near skin. Click to land, soft.",
-      "Hold to drink. Watch the eye — back off before it wakes.",
-      "Enough. Find still water and click to lay your brood.",
-    ];
-    let s = this.stage;
-    if (s === 0 && this.moved > 400) s = 1;
-    if (s === 1) {
-      const human = world.query("host")[0]!;
-      const hp = world.get<Pos>(human, "pos")!;
-      if (Math.hypot(hp.x - p.x, hp.y - p.y, hp.z - p.z) < 2.6) s = 2;
-    }
-    if (s === 2 && m.landedOn !== null) s = 3;
-    if (s === 3 && night.blood >= 0.5) s = 4;
-    if (s === 4 && night.laidEggs) s = 5;
-    this.stage = s;
-    this.hud.hint(s < lines.length ? lines[s]! : "");
-  }
-}

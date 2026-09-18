@@ -61,3 +61,17 @@ export interface Fan {
 export interface FemalePath {
   t: number;
 }
+
+/** Every named data bag the Bedroom and Night spawn, for debug inspection. */
+export const COMPONENT_NAMES = [
+  "pos",
+  "vel",
+  "mosquito",
+  "host",
+  "hot",
+  "eggSpot",
+  "plant",
+  "fan",
+  "femalePath",
+  "plume",
+] as const;

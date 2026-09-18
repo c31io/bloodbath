@@ -22,7 +22,7 @@ export const LAYOUT = {
 } satisfies Record<string, Pos>;
 
 /** Spawn every static Bedroom entity: Hosts, hot decoys, Egg Spots, Nectar plants, the fan. */
-export function buildBedroom(world: World): void {
+export function buildBedroom<R>(world: World<R>): void {
   const spawn = (pos: Pos, comps: Array<[string, object]>): number => {
     const id = world.entity();
     world.add(id, "pos", { ...pos });

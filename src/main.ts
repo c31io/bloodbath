@@ -6,14 +6,16 @@ import {
   advanceNight,
   type Colony,
 } from "./domain/colony.js";
-import { finishNight, resourcesOf, startNight, type NightWorld } from "./game/flow.js";
+import { finishNight, startNight } from "./game/flow.js";
+import { playerState, type NightWorld } from "./game/night.js";
 import { SKILL_CATALOG, type SkillId } from "./domain/skills.js";
 import type { OffspringCard } from "./domain/types.js";
 import { BuzzAudio } from "./audio/buzz.js";
 import { clearSave, loadColony, saveColony } from "./persist.js";
-import type { Mosquito, Pos } from "./game/components.js";
+import type { Mosquito } from "./game/components.js";
 import { attachInput } from "./game/input.js";
-import { buildHud, Hud, Tutorial } from "./ui/hud.js";
+import { Tutorial } from "./game/tutorial.js";
+import { buildHud, Hud } from "./ui/hud.js";
 import { hideOverlay, showBrood, showHow, showMenu, showNightEnd, showSkills } from "./ui/overlays.js";
 import { Tools } from "./ui/tools.js";
 import { GameView } from "./game/view.js";
@@ -24,7 +26,7 @@ const hudRoot = document.querySelector<HTMLDivElement>("#hud")!;
 const view = new GameView(canvas);
 const audio = new BuzzAudio();
 const hud = new Hud(buildHud(hudRoot));
-const tutorial = new Tutorial(hud);
+const tutorial = new Tutorial((text) => hud.hint(text));
 
 let colony: Colony = loadColony() ?? newColony();
 let world: NightWorld | null = null;
@@ -124,12 +126,11 @@ function frame(now: number): void {
     hud.setLockHint(!locked);
     if (locked) {
       world.update(dt);
-      const res = resourcesOf(world);
-      if (res.night.sipped) {
+      if (world.res.night.sipped) {
         audio.sip();
-        res.night.sipped = false;
+        world.res.night.sipped = false;
       }
-      if (res.night.outcome !== "alive" || res.night.dawn <= 0 || res.night.voluntaryEnd) endNight();
+      if (world.res.night.outcome !== "alive" || world.res.night.dawn <= 0 || world.res.night.voluntaryEnd) endNight();
     }
     if (world) {
       view.sync(world, tools.channels);
@@ -142,11 +143,11 @@ function frame(now: number): void {
         nightOver: false,
       });
       tutorial.update(world, colony, input);
-      const player = world.query("player")[0]!;
-      const vel = world.get<Pos>(player, "vel")!;
-      const m = world.get<Mosquito>(player, "mosquito")!;
-      audio.wing(Math.hypot(vel.x, vel.y, vel.z), input.forward ? 1 : 0);
-      audio.feeding(m.feeding);
+      const p = playerState(world);
+      if (p) {
+        audio.wing(Math.hypot(p.vel.x, p.vel.y, p.vel.z), input.forward ? 1 : 0);
+        audio.feeding(p.mosquito.feeding);
+      }
       tools.update(world, inspectNX, inspectNY);
     }
   } else {

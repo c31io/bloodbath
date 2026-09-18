@@ -7,8 +7,8 @@ import { LAYOUT, ROOM } from "./bedroom.js";
 import { windAt } from "./systems.js";
 import { loadProps } from "./props.js";
 import type { EggSpotC, Fan, Host, Hot, Mosquito, Pos } from "./components.js";
-import type { NightWorld } from "./flow.js";
-import { resourcesOf } from "./flow.js";
+import type { NightWorld } from "./night.js";
+import { playerState } from "./night.js";
 
 export interface SenseChannels {
   world: boolean;
@@ -341,12 +341,12 @@ export class GameView {
   sync(world: NightWorld | null, channels: SenseChannels): void {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     const t = performance.now() / 1000;
-    const player = world?.query("player")[0];
-    if (world !== null && player !== undefined) {
+    const ref = world ? playerState(world) : null;
+    if (ref && world) {
       // Keen Sense sharpens the plume channel
-      this.plumeGain = resourcesOf(world).colony.skills.has("keenSense") ? 1.6 : 1;
-      const m = world.get<Mosquito>(player, "mosquito")!;
-      const p = world.get<Pos>(player, "pos")!;
+      this.plumeGain = world.res.colony.skills.has("keenSense") ? 1.6 : 1;
+      const m = ref.mosquito;
+      const p = ref.pos;
       this.camera.quaternion.setFromEuler(new THREE.Euler(m.pitch, m.yaw, m.roll, "YXZ"));
       this.camera.position.set(p.x, p.y, p.z);
 

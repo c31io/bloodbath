@@ -1,4 +1,4 @@
-import type { NightInput } from "./flow.js";
+import type { NightInput } from "./night.js";
 
 export interface InputHooks {
   onToolsToggle: () => void;

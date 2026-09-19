@@ -25,6 +25,9 @@ export interface ModelSpec {
 export interface RoomObject {
   /** gameplay anchor: where entities spawn and interactions attach (Heat origin, sip point) */
   anchor: Pos;
+  /** where the creature's CO2 emits — the nose. Breath is not the body: the
+   *  landing anchor sits mid-body, so the plume spawns as its own entity. */
+  breath?: Pos;
   model?: ModelSpec;
 }
 
@@ -35,7 +38,7 @@ const HALF_PI = Math.PI / 2;
 export const BEDROOM = {
   // The sleeper is skinned: placement measures his posed bounds after an explicit
   // skeleton settlement (see loadProps) — a plain Box3 would see bind-pose vertices.
-  bed: { anchor: { x: 2.2, y: 0.54, z: 0.4 }, model: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: HALF_PI, solid: [
+  bed: { anchor: { x: 2.2, y: 0.54, z: 0.4 }, breath: { x: 1.4, y: 0.6, z: 0.4 }, model: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: HALF_PI, solid: [
     [-1.05, 0, -0.7, -0.93, 0.77, -0.5],
     [-1.05, 0, 0.5, -0.93, 0.77, 0.7],
     [0.93, 0, -0.7, 1.05, 0.58, -0.5],
@@ -79,7 +82,7 @@ export const BEDROOM = {
     [0.39, 0.2, 0.09, 0.49, 0.3, 0.17],
     [0.78, 0.2, -0.17, 0.88, 0.3, 0.17],
   ] } },
-  cat: { anchor: { x: -1.5, y: 0.12, z: 1.5 }, model: { file: "cat-a", pos: [-1.5, 0, 1.5], size: 0.55, solid: [
+  cat: { anchor: { x: -1.5, y: 0.12, z: 1.5 }, breath: { x: -1.5, y: 0.35, z: 1.82 }, model: { file: "cat-a", pos: [-1.5, 0, 1.5], size: 0.55, solid: [
     [-0.17, 0, -0.27, 0.17, 0.29, 0.09],
     [-0.17, 0.1, 0.09, 0.17, 0.38, 0.27],
     [-0.17, 0.29, 0, 0.17, 0.38, 0.09],
@@ -231,13 +234,13 @@ export function buildBedroom<R>(world: World<R>): void {
   spawn(BEDROOM.bed.anchor, [
     ["host", { kind: "human", pool: makePool(4.0), state: createHostState("human") }],
     ["hot", { strength: 0.9 }],
-    ["plume", makePlume(BEDROOM.bed.anchor, 1.0)],
   ]);
+  spawn(BEDROOM.bed.breath, [["plume", makePlume(BEDROOM.bed.breath, 1.0)]]);
   spawn(BEDROOM.cat.anchor, [
     ["host", { kind: "cat", pool: makePool(1.2), state: createHostState("cat") }],
     ["hot", { strength: 0.7 }],
-    ["plume", makePlume(BEDROOM.cat.anchor, 0.6)],
   ]);
+  spawn(BEDROOM.cat.breath, [["plume", makePlume(BEDROOM.cat.breath, 0.6)]]);
   spawn(BEDROOM.lamp.anchor, [["hot", { strength: 1.0 }]]);
   spawn(BEDROOM.phone.anchor, [["hot", { strength: 0.5 }]]);
   spawn(BEDROOM.laptop.anchor, [["hot", { strength: 0.8 }]]);

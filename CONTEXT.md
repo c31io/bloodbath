@@ -88,6 +88,10 @@ _Avoid_: SP, XP, coins
 A playable environment with its own Conditions.
 _Avoid_: level, map, stage
 
+**Bedroom**:
+The one Scene bloodbath ships: a moonlit bedroom whose sleeping human and cat are the Hosts. Its fan and its Egg Spots define the Night's terrain.
+_Avoid_: room, house, man, sleeper
+
 **Condition**:
 An environmental modifier that changes how a Scene plays (wind, fan, repellent, darkness).
 _Avoid_: modifier, hazard, weather

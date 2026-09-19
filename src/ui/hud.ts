@@ -17,6 +17,7 @@ export interface HudRefs {
   courtshipFill: HTMLDivElement;
   name: HTMLDivElement;
   hint: HTMLDivElement;
+  takeoff: HTMLDivElement;
   lockHint: HTMLDivElement;
 }
 
@@ -32,6 +33,7 @@ export function buildHud(root: HTMLDivElement): HudRefs {
     <div id="hud-courtship"><span>mirror her flight</span><div class="bar"><div id="hud-courtship"></div></div></div>
     <div id="hud-name"></div>
     <div id="hud-hint"></div>
+    <div id="hud-takeoff"><b>space</b> — take off</div>
     <div id="hud-lock">click to fly</div>
   `;
   return {
@@ -48,7 +50,8 @@ export function buildHud(root: HTMLDivElement): HudRefs {
     courtshipFill: root.querySelector("#hud-courtship")!,
     name: root.querySelector("#hud-name")!,
     hint: root.querySelector("#hud-hint")!,
-    lockHint: root.querySelector("#hud-lock")!,
+    takeoff: root.querySelector("#hud-takeoff")!,
+    lockHint: root.querySelector("#hud-lock")!
   };
 }
 
@@ -76,6 +79,10 @@ export class Hud {
 
   setLockHint(visible: boolean): void {
     this.refs.lockHint.style.display = visible ? "block" : "none";
+  }
+
+  setLanded(visible: boolean): void {
+    this.refs.takeoff.style.display = visible ? "block" : "none";
   }
 
   hint(text: string): void {

@@ -154,11 +154,13 @@ function frame(now: number): void {
           document.title = `x ${p.pos.x.toFixed(2)} y ${p.pos.y.toFixed(2)} z ${p.pos.z.toFixed(2)} | yaw ${m.yaw.toFixed(2)} pitch ${m.pitch.toFixed(2)} | landed ${m.landedOn !== null} | ${world!.res.night.outcome}`;
         }
       }
+      hud.setLanded(p !== null && p.mosquito.landedOn !== null);
       tools.update(world, inspectNX, inspectNY);
     }
   } else {
     hud.showMeta(false);
     hud.setLockHint(false);
+    hud.setLanded(false);
     view.sync(null, tools.channels);
     tools.update(null, null, null);
   }

@@ -158,6 +158,21 @@ body {
   text-shadow: 0 1px 4px #000;
 }
 
+#hud-takeoff {
+  bottom: 78px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--dim);
+  text-shadow: 0 1px 4px #000;
+  display: none;
+}
+#hud-takeoff b {
+  color: var(--ink);
+}
+
 #hud-lock {
   top: 60%;
   left: 50%;

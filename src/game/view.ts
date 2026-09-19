@@ -33,6 +33,83 @@ function glowTexture(): THREE.Texture {
   return tex;
 }
 
+/** Painted night view for the window backdrop: sky gradient, stars, moon,
+ *  a two-layer city skyline with lit windows. Cosmetic entropy (Math.random),
+ *  same license as the plumes. */
+function nightViewTexture(): THREE.Texture {
+  const c = document.createElement("canvas");
+  c.width = 1024;
+  c.height = 512;
+  const g = c.getContext("2d")!;
+  const sky = g.createLinearGradient(0, 0, 0, 512);
+  sky.addColorStop(0, "#060913");
+  sky.addColorStop(0.55, "#0b1226");
+  sky.addColorStop(0.8, "#16203c");
+  sky.addColorStop(1, "#1d2a4a");
+  g.fillStyle = sky;
+  g.fillRect(0, 0, 1024, 512);
+  for (let i = 0; i < 240; i++) {
+    const x = Math.random() * 1024;
+    const y = 60 + Math.random() * 300;
+    g.globalAlpha = 0.25 + Math.random() * 0.75;
+    g.fillStyle = Math.random() < 0.12 ? "#cfe0ff" : "#ffffff";
+    g.beginPath();
+    g.arc(x, y, 0.3 + Math.random() * 1.3, 0, 7);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+  g.fillStyle = "#10182e";
+  let x = 0;
+  while (x < 1024) {
+    const w = 40 + Math.random() * 90;
+    const h = 60 + Math.random() * 90;
+    g.fillRect(x, 512 - 160 - h, w, h + 160);
+    x += w + Math.random() * 24;
+  }
+  const mx = 665;
+  const my = 230;
+  const mr = 30;
+  const halo = g.createRadialGradient(mx, my, mr * 0.4, mx, my, mr * 3.2);
+  halo.addColorStop(0, "rgba(220,228,255,0.55)");
+  halo.addColorStop(1, "rgba(220,228,255,0)");
+  g.fillStyle = halo;
+  g.beginPath();
+  g.arc(mx, my, mr * 3.2, 0, 7);
+  g.fill();
+  g.fillStyle = "#e8e6d8";
+  g.beginPath();
+  g.arc(mx, my, mr, 0, 7);
+  g.fill();
+  g.fillStyle = "rgba(180,178,166,0.5)";
+  for (const [dx, dy, cr] of [[-0.3, -0.2, 0.16], [0.25, 0.1, 0.22], [-0.05, 0.35, 0.12]] as Array<[number, number, number]>) {
+    g.beginPath();
+    g.arc(mx + dx * mr, my + dy * mr, cr * mr, 0, 7);
+    g.fill();
+  }
+  x = -20;
+  while (x < 1024) {
+    const w = 60 + Math.random() * 110;
+    const h = 40 + Math.random() * 70;
+    const y0 = 512 - 90 - h;
+    g.fillStyle = "#080c1a";
+    g.fillRect(x, y0, w, h + 90);
+    const dots = Math.floor((w * h) / 900);
+    for (let i = 0; i < dots; i++) {
+      if (Math.random() < 0.55) continue;
+      g.fillStyle = Math.random() < 0.7 ? "rgba(255,196,120,0.8)" : "rgba(170,220,255,0.7)";
+      g.fillRect(x + 6 + Math.random() * (w - 12), y0 + 6 + Math.random() * (h - 10), 2.5, 3.5);
+    }
+    x += w + Math.random() * 30;
+  }
+  const haze = g.createLinearGradient(0, 300, 0, 512);
+  haze.addColorStop(0, "rgba(60,80,140,0)");
+  haze.addColorStop(1, "rgba(60,80,140,0.18)");
+  g.fillStyle = haze;
+  g.fillRect(0, 300, 1024, 212);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 interface PlumeView {
   points: THREE.Points;
   source: number;
@@ -129,12 +206,36 @@ export class GameView {
     this.box(R.x * 2, 0.1, R.z * 2, 0, -0.05, 0, this.mat(0x241f31));
     this.box(R.x * 2, 0.1, R.z * 2, 0, R.h, 0, this.mat(0x181523));
     this.box(0.1, R.h, R.z * 2, -R.x, R.h / 2, 0, this.mat(0x2c2540));
+    // north wall, split around the window opening (x -0.8..0.8, y 1.41..2.15)
+    const wall = this.mat(0x2c2540);
+    this.box(R.x * 2, 1.41, 0.1, 0, 0.705, -R.z, wall);
+    this.box(R.x * 2, 0.85, 0.1, 0, 2.575, -R.z, wall);
+    this.box(2.2, 0.74, 0.1, -1.9, 1.78, -R.z, wall);
+    this.box(2.2, 0.74, 0.1, 1.9, 1.78, -R.z, wall);
     this.box(0.1, R.h, R.z * 2, R.x, R.h / 2, 0, this.mat(0x2c2540));
-    this.box(R.x * 2, R.h, 0.1, 0, R.h / 2, -R.z, this.mat(0x2c2540));
     this.box(R.x * 2, R.h, 0.1, 0, R.h / 2, R.z, this.mat(0x2c2540));
 
     // sill shelf for the windowsill plant model (its solid lives in SOLIDS, bedroom.ts)
     this.box(1.1, 0.06, 0.32, 0, 1.38, -2.36, this.mat(0x35294a));
+
+    // window dressing: lintel over the opening, cross muntins (the posts at
+    // x ±0.8 are its jambs), a faint glass pane, and the night view outside
+    const frame = this.mat(0x0c0a14);
+    this.box(1.68, 0.08, 0.12, 0, 2.15, -R.z, frame);
+    this.box(0.05, 0.74, 0.06, 0, 1.78, -R.z, frame);
+    this.box(1.6, 0.05, 0.06, 0, 1.78, -R.z, frame);
+    const glass = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6, 0.74),
+      new THREE.MeshBasicMaterial({ color: 0x9db8ff, transparent: true, opacity: 0.06, depthWrite: false }),
+    );
+    glass.position.set(0, 1.78, -R.z - 0.04);
+    this.worldGroup.add(glass);
+    const view = new THREE.Mesh(
+      new THREE.PlaneGeometry(12, 7),
+      new THREE.MeshBasicMaterial({ map: nightViewTexture(), fog: false, toneMapped: false }),
+    );
+    view.position.set(0, 2.2, -6.5);
+    this.worldGroup.add(view);
     this.box(0.06, 1.3, 0.06, -0.8, 1.6, -R.z + 0.1, this.mat(0x0c0a14));
     this.box(0.06, 1.3, 0.06, 0.8, 1.6, -R.z + 0.1, this.mat(0x0c0a14));
     this.box(1.0, 0.02, 1.4, -1.5, 0.02, 1.5, this.mat(0x5a3550, { rough: 1 }));

@@ -11,6 +11,7 @@ export const ROOM = { minX: -3, maxX: 3, minZ: -2.5, maxZ: 2.5, height: 3 };
 export interface ModelSpec {
   file: string;
   size: number;
+  rotX?: number;
   rotY?: number;
   rotZ?: number;
   pos: [number, number, number];
@@ -111,7 +112,7 @@ export const BEDROOM = {
     [-0.1, 0.18, 0, 0.1, 0.45, 0.18],
     [-0.1, 0.27, -0.09, 0.1, 0.45, 0],
   ] } },
-  phone: { anchor: { x: 2.78, y: 0.9, z: -1.62 }, model: { file: "phone", pos: [2.78, 0.74, -1.62], size: 0.16, solid: [[-0.04, 0, -0.01, 0.04, 0.16, 0.01]] } },
+  phone: { anchor: { x: 2.74, y: 0.76, z: -1.62 }, model: { file: "phone", pos: [2.78, 0.74, -1.62], size: 0.16, rotX: -HALF_PI, rotY: 0.35, solid: [[-0.07, 0, -0.09, 0.07, 0.02, 0.09]] } },
   desk: { anchor: { x: -2.4, y: 0.78, z: -1.5 }, model: { file: "desk", pos: [-2.4, 0, -1.3], size: 1.25, solid: [
     [-0.63, 0, -0.29, -0.53, 0.63, -0.19],
     [-0.63, 0, 0.19, -0.53, 0.63, 0.29],

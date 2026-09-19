@@ -44,9 +44,9 @@ export async function loadProps(group: THREE.Group): Promise<void> {
       const gltf = await loader.loadAsync(`${base}models/${model.file}.glb`);
       const wrapper = new THREE.Group();
       wrapper.add(gltf.scene);
-      // ZYX so rotY (pose in plan) applies before rotZ (tip over)
+      // ZYX so rotX (tip flat) applies first, then rotY (pose in plan), then rotZ (tip over)
       wrapper.rotation.order = "ZYX";
-      wrapper.rotation.set(0, model.rotY ?? 0, model.rotZ ?? 0);
+      wrapper.rotation.set(model.rotX ?? 0, model.rotY ?? 0, model.rotZ ?? 0);
       wrapper.visible = false;
       group.add(wrapper);
       wrappers.push({ wrapper, model });

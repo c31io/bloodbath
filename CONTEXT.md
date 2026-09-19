@@ -26,6 +26,10 @@ _Avoid_: victim, target, human
 The host's kill attempt against a feeding or landed mosquito.
 _Avoid_: death, hit, attack
 
+**Suspicion**:
+How close a Host is to Swatting: feeding and closeness raise it, absence lets it decay, and at its peak the Host Swats. It reads as a stage ladder — asleep, stirring, awake, hunting — on the player's gauge.
+_Avoid_: awareness, aggro, alert level
+
 ### Senses
 
 **Mosquito Sense**:

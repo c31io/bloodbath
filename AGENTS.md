@@ -16,5 +16,5 @@ The ubiquitous language lives in @CONTEXT.md — use those terms exactly in code
 
 - `docs/adr/` — recorded decisions; do not re-litigate them without new evidence.
 - `src/game/night.ts` — the Night contract: state types, the typed resource bag, and the world accessors (`playerState`, `hostOfKind`, …). The seam every consumer of a live Night crosses.
-- `src/game/bedroom.ts` — the one placement vocabulary (`BEDROOM` table): gameplay anchors and model specs per object, consumed by both entity spawning and model loading.
+- `src/game/bedroom.ts` — the one placement vocabulary (`BEDROOM` table): gameplay anchors and model specs per object, consumed by entity spawning, collision (the derived `SOLIDS`), and model loading.
 - The headless seam: `startNight` accepts injected input and rng; all logic lives in `src/game/systems.ts` systems; the renderer (`view.ts`) never simulates — it only uploads.

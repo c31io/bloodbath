@@ -34,7 +34,7 @@ export interface HostTick {
 }
 
 /**
- * One tick of host awareness. Feeding raises suspicion (scaled by stealthMod);
+ * One tick of Host Suspicion. Feeding raises suspicion (scaled by stealthMod);
  * absence decays it (never below the calm floor once the host has swatted).
  * Crossing 100 is a Swat: it lands only if the mosquito is still in reach,
  * then the host calms to its floor.

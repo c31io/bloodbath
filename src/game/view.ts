@@ -48,10 +48,9 @@ export class GameView {
   private composer: EffectComposer;
   private worldGroup = new THREE.Group();
   private glow = glowTexture();
-  private heatSprites = new Map<number, THREE.Sprite>();
+  private glowBound = new Set<number>();
   private heatGlow: Array<{ id: number; strength: number; uniforms: Array<{ value: number }> }> = [];
   private glowMats: THREE.Material[] = [];
-  private heatGroup = new THREE.Group();
   private co2Group = new THREE.Group();
   private plumes: PlumeView[] = [];
   private nightGroup = new THREE.Group();
@@ -71,7 +70,7 @@ export class GameView {
     this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.02, 40);
     this.scene.fog = new THREE.FogExp2(0x05070f, 0.16);
     this.scene.background = new THREE.Color(0x03040a);
-    this.scene.add(this.worldGroup, this.heatGroup, this.co2Group);
+    this.scene.add(this.worldGroup, this.co2Group);
     this.worldGroup.add(this.propsGroup, this.nightGroup);
 
     this.buildRoom();
@@ -162,7 +161,7 @@ export class GameView {
   private clearNight(): void {
     this.nightGroup.clear();
     this.fallbacks = [];
-    this.heatSprites.clear();
+    this.glowBound.clear();
     this.spotRings.clear();
     this.plumes = [];
     for (const m of this.glowMats) m.dispose();
@@ -180,7 +179,6 @@ export class GameView {
   /** Hot entity -> which model glows: the body-carrying BEDROOM row at this anchor. */
   private bodyFor(pos: Pos): string | undefined {
     for (const row of Object.values(BEDROOM) as RoomObject[]) {
-      if (!row.body) continue;
       if (Math.hypot(row.anchor.x - pos.x, row.anchor.y - pos.y, row.anchor.z - pos.z) < 0.01) return row.body;
     }
     return undefined;
@@ -188,8 +186,10 @@ export class GameView {
 
   /** Model-wide Heat: clone the body model's materials and add a fresnel warm
    *  glow to their emissive (edges burn hottest). sync drives uHeat by the same
-   *  proximity falloff as the sprites. */
+   *  proximity falloff that drove the old sprite beacons. */
   private bindGlow(id: number, file: string, strength: number, color: THREE.Color): void {
+    if (this.glowBound.has(id)) return; // hosts carry "hot" too; bind once
+    this.glowBound.add(id);
     const uniforms: Array<{ value: number }> = [];
     for (const wrapper of this.propsGroup.children) {
       if (wrapper.userData.file !== file) continue;
@@ -256,45 +256,15 @@ export class GameView {
       }
 
       const warm = host.kind === "human" ? new THREE.Color(1, 0.55, 0.25) : new THREE.Color(1, 0.4, 0.15);
-      const sprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: this.glow,
-          color: warm,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          transparent: true,
-          opacity: 0,
-        }),
-      );
-      sprite.position.set(pos.x, pos.y, pos.z);
-      sprite.userData.strength = host.kind === "human" ? 0.9 : 0.7;
-      this.heatGroup.add(sprite);
-      this.heatSprites.set(id, sprite);
       const bodyFile = this.bodyFor(pos);
-      if (bodyFile) this.bindGlow(id, bodyFile, sprite.userData.strength as number, warm);
+      if (bodyFile) this.bindGlow(id, bodyFile, host.kind === "human" ? 0.9 : 0.7, warm);
     }
 
     for (const id of world.query("hot")) {
-      if (this.heatSprites.has(id)) continue;
-      const hot = world.get<Hot>(id, "hot")!;
+      if (this.glowBound.has(id)) continue; // host loop already bound it
       const pos = world.get<Pos>(id, "pos")!;
-      const sprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: this.glow,
-          color: new THREE.Color(1, 0.42, 0.1),
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          transparent: true,
-          opacity: 0,
-        }),
-      );
-      sprite.position.set(pos.x, pos.y, pos.z);
-      sprite.userData.strength = hot.strength;
-      this.heatGroup.add(sprite);
-      this.heatSprites.set(id, sprite);
       const bodyFile = this.bodyFor(pos);
-      if (bodyFile) this.bindGlow(id, bodyFile, hot.strength, new THREE.Color(1, 0.42, 0.1));
-
+      if (bodyFile) this.bindGlow(id, bodyFile, world.get<Hot>(id, "hot")!.strength, new THREE.Color(1, 0.42, 0.1));
       const prop = this.fallback(new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), this.mat(0xffb060, { emissive: 0xffb060, ei: 1.6 })));
       prop.position.set(pos.x, pos.y, pos.z);
       prop.userData.entity = id;
@@ -392,16 +362,6 @@ export class GameView {
       this.camera.quaternion.setFromEuler(new THREE.Euler(m.pitch, m.yaw, m.roll, "YXZ"));
       this.camera.position.set(p.x, p.y, p.z);
 
-      for (const [id, sprite] of this.heatSprites) {
-        const hp = world.get<Pos>(id, "pos");
-        if (!hp) continue;
-        const strength = (sprite.userData.strength as number | undefined) ?? 0.7;
-        const d = Math.hypot(hp.x - p.x, hp.y - p.y, hp.z - p.z);
-        const mat = sprite.material as THREE.SpriteMaterial;
-        mat.opacity = Math.max(0, 1 - d / HEAT_RANGE) * 0.6 * strength;
-        sprite.scale.setScalar(0.5 + Math.sin(t * 3) * 0.04);
-      }
-
       // model-wide heat: the fresnel glow on the body meshes themselves
       for (const fx of this.heatGlow) {
         const hp = world.get<Pos>(fx.id, "pos");
@@ -442,7 +402,6 @@ export class GameView {
     }
 
     this.worldGroup.visible = channels.world;
-    this.heatGroup.visible = channels.heat;
     this.co2Group.visible = channels.co2;
     this.composer.render();
   }

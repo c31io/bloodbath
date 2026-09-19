@@ -29,7 +29,7 @@ export function buildHud(root: HTMLDivElement): HudRefs {
       <div class="bar"><div id="hud-energy"></div></div>
       <div class="bar blood" id="hud-blood-row"><div id="hud-blood"></div></div>
     </div>
-    <div id="hud-suspicion"><span id="hud-suspicion-label"></span><div class="bar"><div id="hud-suspicion"></div></div></div>
+    <div id="hud-suspicion"><span id="hud-suspicion-label"></span><div class="bar"><div id="hud-suspicion-fill"></div></div></div>
     <div id="hud-courtship"><span>mirror her flight</span><div class="bar"><div id="hud-courtship"></div></div></div>
     <div id="hud-name"></div>
     <div id="hud-hint"></div>
@@ -43,8 +43,8 @@ export function buildHud(root: HTMLDivElement): HudRefs {
     energyFill: root.querySelector("#hud-energy")!,
     bloodRow: root.querySelector("#hud-blood-row")!,
     bloodFill: root.querySelector("#hud-blood")!,
+    suspicionFill: root.querySelector("#hud-suspicion-fill")!,
     suspicionRow: root.querySelector("#hud-suspicion")!,
-    suspicionFill: root.querySelector("#hud-suspicion")!,
     suspicionLabel: root.querySelector("#hud-suspicion-label")!,
     courtshipRow: root.querySelector("#hud-courtship")!,
     courtshipFill: root.querySelector("#hud-courtship")!,

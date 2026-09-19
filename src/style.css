@@ -119,6 +119,7 @@ body {
   background: #4a4560;
 }
 #hud-suspicion .bar > div {
+  margin: 0 auto;
   background: var(--danger);
 }
 

@@ -107,7 +107,10 @@ export class Hud {
     let label = "";
     for (const id of world.query("host")) {
       const host = world.get<Host>(id, "host")!;
-      if (host.state.suspicion >= worst) {
+      const s = host.state.suspicion;
+      // the human is the host that matters; he wins ties so the resting
+      // label never defaults to the decoy cat
+      if (s > worst || (s === worst && host.kind === "human")) {
         worst = host.state.suspicion;
         label = `${host.kind} ${STAGE_LABEL[host.state.stage]}`;
       }

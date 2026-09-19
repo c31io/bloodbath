@@ -160,6 +160,7 @@ function frame(now: number): void {
   } else {
     hud.showMeta(false);
     hud.setLockHint(false);
+    hud.setSuspicionVisible(false);
     hud.setLanded(false);
     view.sync(null, tools.channels);
     tools.update(null, null, null);

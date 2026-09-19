@@ -112,9 +112,6 @@ body {
   text-transform: uppercase;
   color: #e8a0a0;
 }
-#hud[data-playing="true"] #hud-suspicion {
-  opacity: 1;
-}
 #hud-suspicion .bar {
   background: #4a4560;
 }

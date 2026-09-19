@@ -81,6 +81,10 @@ export class Hud {
     this.refs.lockHint.style.display = visible ? "block" : "none";
   }
 
+  setSuspicionVisible(visible: boolean): void {
+    this.refs.suspicionRow.style.opacity = visible ? "1" : "0";
+  }
+
   setLanded(visible: boolean): void {
     this.refs.takeoff.style.display = visible ? "block" : "none";
   }
@@ -115,6 +119,7 @@ export class Hud {
         label = `${host.kind} ${STAGE_LABEL[host.state.stage]}`;
       }
     }
+    this.setSuspicionVisible(worst > 5);
     this.refs.suspicionFill.style.width = `${Math.min(100, worst)}%`;
     this.refs.suspicionLabel.textContent = label;
 

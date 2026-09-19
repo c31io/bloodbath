@@ -47,7 +47,7 @@ export async function loadProps(group: THREE.Group): Promise<void> {
       // ZYX so rotX (tip flat) applies first, then rotY (pose in plan), then rotZ (tip over)
       wrapper.rotation.order = "ZYX";
       wrapper.rotation.set(model.rotX ?? 0, model.rotY ?? 0, model.rotZ ?? 0);
-      wrapper.visible = false;
+      wrapper.userData.file = model.file;
       group.add(wrapper);
       wrappers.push({ wrapper, model });
     }),

@@ -3,7 +3,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { BEDROOM, ROOM } from "./bedroom.js";
+import { BEDROOM, ROOM, type RoomObject } from "./bedroom.js";
 import { windAt } from "./systems.js";
 import { loadProps } from "./props.js";
 import type { EggSpotC, Fan, Host, Hot, Mosquito, Plume, Pos } from "./components.js";
@@ -49,6 +49,8 @@ export class GameView {
   private worldGroup = new THREE.Group();
   private glow = glowTexture();
   private heatSprites = new Map<number, THREE.Sprite>();
+  private heatGlow: Array<{ id: number; strength: number; uniforms: Array<{ value: number }> }> = [];
+  private glowMats: THREE.Material[] = [];
   private heatGroup = new THREE.Group();
   private co2Group = new THREE.Group();
   private plumes: PlumeView[] = [];
@@ -163,7 +165,9 @@ export class GameView {
     this.heatSprites.clear();
     this.spotRings.clear();
     this.plumes = [];
-    this.femaleMote = null;
+    for (const m of this.glowMats) m.dispose();
+    this.glowMats = [];
+    this.heatGlow = [];
   }
 
   /** Model replaces it once loaded; until then the primitive stays visible. */
@@ -171,6 +175,51 @@ export class GameView {
     mesh.visible = !this.propReady;
     this.fallbacks.push(mesh);
     return mesh;
+  }
+
+  /** Hot entity -> which model glows: the body-carrying BEDROOM row at this anchor. */
+  private bodyFor(pos: Pos): string | undefined {
+    for (const row of Object.values(BEDROOM) as RoomObject[]) {
+      if (!row.body) continue;
+      if (Math.hypot(row.anchor.x - pos.x, row.anchor.y - pos.y, row.anchor.z - pos.z) < 0.01) return row.body;
+    }
+    return undefined;
+  }
+
+  /** Model-wide Heat: clone the body model's materials and add a fresnel warm
+   *  glow to their emissive (edges burn hottest). sync drives uHeat by the same
+   *  proximity falloff as the sprites. */
+  private bindGlow(id: number, file: string, strength: number, color: THREE.Color): void {
+    const uniforms: Array<{ value: number }> = [];
+    for (const wrapper of this.propsGroup.children) {
+      if (wrapper.userData.file !== file) continue;
+      wrapper.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
+        const uHeat = { value: 0 };
+        mat.onBeforeCompile = (shader) => {
+          shader.uniforms.uHeat = uHeat;
+          shader.uniforms.uHeatColor = { value: color };
+          shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", "#include <common>\nuniform float uHeat;\nuniform vec3 uHeatColor;")
+            .replace(
+              "#include <emissivemap_fragment>",
+              [
+                "#include <emissivemap_fragment>",
+                "#ifndef FLAT_SHADED",
+                "  float heatRim = pow(1.0 - saturate(dot(normalize(vNormal), normalize(vViewPosition))), 2.0);",
+                "  totalEmissiveRadiance += uHeatColor * uHeat * (0.25 + 1.5 * heatRim);",
+                "#endif",
+              ].join("\n"),
+            );
+        };
+        mesh.material = mat;
+        this.glowMats.push(mat);
+        uniforms.push(uHeat);
+      });
+    }
+    if (uniforms.length > 0) this.heatGlow.push({ id, strength, uniforms });
   }
 
   /** Bind live ECS entities to view meshes: hosts, hot decoys, spots, plants, plumes, female. */
@@ -221,6 +270,8 @@ export class GameView {
       sprite.userData.strength = host.kind === "human" ? 0.9 : 0.7;
       this.heatGroup.add(sprite);
       this.heatSprites.set(id, sprite);
+      const bodyFile = this.bodyFor(pos);
+      if (bodyFile) this.bindGlow(id, bodyFile, sprite.userData.strength as number, warm);
     }
 
     for (const id of world.query("hot")) {
@@ -241,6 +292,8 @@ export class GameView {
       sprite.userData.strength = hot.strength;
       this.heatGroup.add(sprite);
       this.heatSprites.set(id, sprite);
+      const bodyFile = this.bodyFor(pos);
+      if (bodyFile) this.bindGlow(id, bodyFile, hot.strength, new THREE.Color(1, 0.42, 0.1));
 
       const prop = this.fallback(new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), this.mat(0xffb060, { emissive: 0xffb060, ei: 1.6 })));
       prop.position.set(pos.x, pos.y, pos.z);
@@ -345,8 +398,17 @@ export class GameView {
         const strength = (sprite.userData.strength as number | undefined) ?? 0.7;
         const d = Math.hypot(hp.x - p.x, hp.y - p.y, hp.z - p.z);
         const mat = sprite.material as THREE.SpriteMaterial;
-        mat.opacity = Math.max(0, 1 - d / HEAT_RANGE) * 0.85 * strength;
+        mat.opacity = Math.max(0, 1 - d / HEAT_RANGE) * 0.6 * strength;
         sprite.scale.setScalar(0.5 + Math.sin(t * 3) * 0.04);
+      }
+
+      // model-wide heat: the fresnel glow on the body meshes themselves
+      for (const fx of this.heatGlow) {
+        const hp = world.get<Pos>(fx.id, "pos");
+        if (!hp) continue;
+        const d = Math.hypot(hp.x - p.x, hp.y - p.y, hp.z - p.z);
+        const v = channels.heat ? Math.max(0, 1 - d / HEAT_RANGE) * fx.strength * (0.75 + 0.25 * Math.sin(t * 2.4)) : 0;
+        for (const u of fx.uniforms) u.value = v;
       }
 
       for (const [id, ring] of this.spotRings) {

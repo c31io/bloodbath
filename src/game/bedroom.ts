@@ -28,6 +28,9 @@ export interface RoomObject {
   /** where the creature's CO2 emits — the nose. Breath is not the body: the
    *  landing anchor sits mid-body, so the plume spawns as its own entity. */
   breath?: Pos;
+  /** model file whose meshes carry this row's Heat glow (view binds the fresnel
+   *  to them). The human host spawns at the bed row, but HIS body glows. */
+  body?: string;
   model?: ModelSpec;
 }
 
@@ -38,7 +41,7 @@ const HALF_PI = Math.PI / 2;
 export const BEDROOM = {
   // The sleeper is skinned: placement measures his posed bounds after an explicit
   // skeleton settlement (see loadProps) — a plain Box3 would see bind-pose vertices.
-  bed: { anchor: { x: 2.2, y: 0.54, z: 0.4 }, breath: { x: 1.4, y: 0.6, z: 0.4 }, model: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: HALF_PI, solid: [
+  bed: { anchor: { x: 2.2, y: 0.54, z: 0.4 }, breath: { x: 1.4, y: 0.6, z: 0.4 }, body: "man-a", model: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: HALF_PI, solid: [
     [-1.05, 0, -0.7, -0.93, 0.77, -0.5],
     [-1.05, 0, 0.5, -0.93, 0.77, 0.7],
     [0.93, 0, -0.7, 1.05, 0.58, -0.5],
@@ -82,7 +85,7 @@ export const BEDROOM = {
     [0.39, 0.2, 0.09, 0.49, 0.3, 0.17],
     [0.78, 0.2, -0.17, 0.88, 0.3, 0.17],
   ] } },
-  cat: { anchor: { x: -1.5, y: 0.12, z: 1.5 }, breath: { x: -1.5, y: 0.35, z: 1.82 }, model: { file: "cat-a", pos: [-1.5, 0, 1.5], size: 0.55, solid: [
+  cat: { anchor: { x: -1.5, y: 0.12, z: 1.5 }, breath: { x: -1.5, y: 0.35, z: 1.82 }, body: "cat-a", model: { file: "cat-a", pos: [-1.5, 0, 1.5], size: 0.55, solid: [
     [-0.17, 0, -0.27, 0.17, 0.29, 0.09],
     [-0.17, 0.1, 0.09, 0.17, 0.38, 0.27],
     [-0.17, 0.29, 0, 0.17, 0.38, 0.09],
@@ -109,13 +112,13 @@ export const BEDROOM = {
     [-0.19, 0.65, -0.28, 0.19, 0.74, -0.19],
     [-0.19, 0.65, 0.19, 0.19, 0.74, 0.28],
   ] } },
-  lamp: { anchor: { x: 2.55, y: 1.3, z: -2 }, model: { file: "light-desk", pos: [2.55, 0.745, -1.95], size: 0.45, solid: [
+  lamp: { anchor: { x: 2.55, y: 1.3, z: -2 }, body: "light-desk", model: { file: "light-desk", pos: [2.55, 0.745, -1.95], size: 0.45, solid: [
     [-0.1, 0, -0.18, 0.1, 0.09, 0.09],
     [-0.1, 0.09, -0.18, 0.1, 0.36, -0.09],
     [-0.1, 0.18, 0, 0.1, 0.45, 0.18],
     [-0.1, 0.27, -0.09, 0.1, 0.45, 0],
   ] } },
-  phone: { anchor: { x: 2.74, y: 0.76, z: -1.62 }, model: { file: "phone", pos: [2.78, 0.74, -1.62], size: 0.16, rotX: -HALF_PI, rotY: 0.35, solid: [[-0.07, 0, -0.09, 0.07, 0.02, 0.09]] } },
+  phone: { anchor: { x: 2.74, y: 0.76, z: -1.62 }, body: "phone", model: { file: "phone", pos: [2.78, 0.74, -1.62], size: 0.16, rotX: -HALF_PI, rotY: 0.35, solid: [[-0.07, 0, -0.09, 0.07, 0.02, 0.09]] } },
   desk: { anchor: { x: -2.4, y: 0.78, z: -1.5 }, model: { file: "desk", pos: [-2.4, 0, -1.3], size: 1.25, solid: [
     [-0.63, 0, -0.29, -0.53, 0.63, -0.19],
     [-0.63, 0, 0.19, -0.53, 0.63, 0.29],
@@ -131,7 +134,7 @@ export const BEDROOM = {
     [-0.24, 0.54, -0.19, 0.24, 0.63, 0.19],
     [-0.14, 0.54, 0.19, 0.14, 0.63, 0.29],
   ] } },
-  laptop: { anchor: { x: -2.4, y: 0.78, z: -1.5 }, model: { file: "computer", pos: [-2.4, 0.63, -1.5], size: 0.5, solid: [[-0.14, 0, -0.07, 0.14, 0.5, 0.07]] } },
+  laptop: { anchor: { x: -2.4, y: 0.78, z: -1.5 }, body: "computer", model: { file: "computer", pos: [-2.4, 0.63, -1.5], size: 0.5, solid: [[-0.14, 0, -0.07, 0.14, 0.5, 0.07]] } },
   vaseSpot: { anchor: { x: 2.55, y: 1.05, z: -1.6 }, model: { file: "chalice", pos: [2.55, 0.745, -1.55], size: 0.26, solid: [[-0.08, 0, -0.08, 0.08, 0.26, 0.08]] } },
   bowlSpot: { anchor: { x: -0.8, y: 0.06, z: 1.9 }, model: { file: "bowl", pos: [-0.8, 0, 1.9], size: 0.24, solid: [
     [-0.12, 0, -0.12, 0.12, 0.06, 0.12],

@@ -107,12 +107,11 @@ export class Hud {
     let label = "";
     for (const id of world.query("host")) {
       const host = world.get<Host>(id, "host")!;
-      if (host.state.suspicion > worst) {
+      if (host.state.suspicion >= worst) {
         worst = host.state.suspicion;
         label = `${host.kind} ${STAGE_LABEL[host.state.stage]}`;
       }
     }
-    this.refs.suspicionRow.style.opacity = worst > 5 ? "1" : "0";
     this.refs.suspicionFill.style.width = `${Math.min(100, worst)}%`;
     this.refs.suspicionLabel.textContent = label;
 

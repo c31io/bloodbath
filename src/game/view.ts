@@ -303,6 +303,10 @@ export class GameView {
           depthWrite: false,
         }),
       );
+      // Particles integrate in place from a parked array (y -10 until the
+      // first respawn), so the bounding sphere Three computes on first render
+      // is a tiny bubble below the floor — never in the frustum. Never cull.
+      points.frustumCulled = false;
       this.co2Group.add(points);
       this.plumes.push({ points, source: id });
     }

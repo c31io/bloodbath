@@ -132,7 +132,7 @@ export class GameView {
     this.box(R.x * 2, R.h, 0.1, 0, R.h / 2, -R.z, this.mat(0x2c2540));
     this.box(R.x * 2, R.h, 0.1, 0, R.h / 2, R.z, this.mat(0x2c2540));
 
-    // sill shelf for the windowsill plant model
+    // sill shelf for the windowsill plant model (its solid lives in SOLIDS, bedroom.ts)
     this.box(1.1, 0.06, 0.32, 0, 1.38, -2.36, this.mat(0x35294a));
     this.box(0.06, 1.3, 0.06, -0.8, 1.6, -R.z + 0.1, this.mat(0x0c0a14));
     this.box(0.06, 1.3, 0.06, 0.8, 1.6, -R.z + 0.1, this.mat(0x0c0a14));

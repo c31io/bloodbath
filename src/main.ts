@@ -149,6 +149,10 @@ function frame(now: number): void {
       if (p) {
         audio.wing(Math.hypot(p.vel.x, p.vel.y, p.vel.z), input.forward ? 1 : 0);
         audio.feeding(p.mosquito.feeding);
+        if (import.meta.env.DEV) {
+          const m = p.mosquito;
+          document.title = `x ${p.pos.x.toFixed(2)} y ${p.pos.y.toFixed(2)} z ${p.pos.z.toFixed(2)} | yaw ${m.yaw.toFixed(2)} pitch ${m.pitch.toFixed(2)} | landed ${m.landedOn !== null} | ${world!.res.night.outcome}`;
+        }
       }
       tools.update(world, inspectNX, inspectNY);
     }

@@ -2,7 +2,7 @@ import type { World } from "../ecs/ecs.js";
 import { drainEnergy, FEED_ENERGY_REGEN, sipNectar } from "../domain/resources.js";
 import { tickHost } from "../domain/suspicion.js";
 import { PLUME_COUNT, type EggSpotC, type FemalePath, type Fan, type Host, type Mosquito, type Plant, type Plume, type Pos } from "./components.js";
-import { ROOM } from "./bedroom.js";
+import { ROOM, SOLIDS } from "./bedroom.js";
 import {
   DAWN_SECONDS,
   playerState,
@@ -173,6 +173,25 @@ export function registerLogicSystems(world: NightWorld): void {
     if (pos.y < 0.03 || pos.y > ROOM.height - 0.05) {
       pos.y = Math.max(0.03, Math.min(ROOM.height - 0.05, pos.y));
       vel.y *= -0.2;
+    }
+
+    // static furniture: push out of the least-penetrated face that the room
+    // shell would not immediately undo (a box face behind a wall clamp or the
+    // floor is not an exit), then damped bounce on that axis
+    for (const s of SOLIDS) {
+      if (pos.x <= s.minX || pos.x >= s.maxX || pos.y <= s.minY || pos.y >= s.maxY || pos.z <= s.minZ || pos.z >= s.maxZ) continue;
+      const exits: Array<[number, "x" | "y" | "z", number]> = [];
+      if (ROOM.minX + 0.05 <= s.minX) exits.push([pos.x - s.minX, "x", s.minX]);
+      if (s.maxX <= ROOM.maxX - 0.05) exits.push([s.maxX - pos.x, "x", s.maxX]);
+      if (0.03 <= s.minY) exits.push([pos.y - s.minY, "y", s.minY]);
+      if (s.maxY <= ROOM.height - 0.05) exits.push([s.maxY - pos.y, "y", s.maxY]);
+      if (ROOM.minZ + 0.05 <= s.minZ) exits.push([pos.z - s.minZ, "z", s.minZ]);
+      if (s.maxZ <= ROOM.maxZ - 0.05) exits.push([s.maxZ - pos.z, "z", s.maxZ]);
+      if (exits.length === 0) continue;
+      const [, axis, face] = exits.reduce((a, b) => (b[0] < a[0] ? b : a));
+      if (axis === "x") { pos.x = face; vel.x *= -0.2; }
+      else if (axis === "y") { pos.y = face; vel.y *= -0.2; }
+      else { pos.z = face; vel.z *= -0.2; }
     }
 
     // landing: interact near a Host

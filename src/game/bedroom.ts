@@ -35,7 +35,7 @@ const HALF_PI = Math.PI / 2;
 export const BEDROOM = {
   // The sleeper is skinned: placement measures his posed bounds after an explicit
   // skeleton settlement (see loadProps) — a plain Box3 would see bind-pose vertices.
-  bed: { anchor: { x: 2.2, y: 0.95, z: 0.4 }, model: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: HALF_PI, solid: [
+  bed: { anchor: { x: 2.2, y: 0.72, z: 0.4 }, model: { file: "bed-double", pos: [2.1, 0, 0.4], size: 2.1, rotY: HALF_PI, solid: [
     [-1.05, 0, -0.7, -0.93, 0.77, -0.5],
     [-1.05, 0, 0.5, -0.93, 0.77, 0.7],
     [0.93, 0, -0.7, 1.05, 0.58, -0.5],
@@ -62,7 +62,7 @@ export const BEDROOM = {
     [-0.93, 0.67, -0.7, -0.82, 0.77, -0.5],
     [-0.93, 0.67, 0.5, -0.82, 0.77, 0.7],
   ] } },
-  sleeper: { anchor: { x: 2.2, y: 0.95, z: 0.4 }, model: { file: "man-a", pos: [2.15, 0.58, 0.4], size: 1.75, rotY: HALF_PI, rotZ: HALF_PI, solid: [
+  sleeper: { anchor: { x: 2.2, y: 0.78, z: 0.4 }, model: { file: "man-a", pos: [2.15, 0.48, 0.4], size: 1.75, rotY: HALF_PI, rotZ: HALF_PI, solid: [
     [-0.88, 0, -0.17, 0.88, 0.2, -0.09],
     [-0.88, 0, -0.09, 0.68, 0.1, 0.17],
     [-0.58, 0, -0.26, -0.39, 0.2, -0.17],

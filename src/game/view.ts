@@ -174,11 +174,14 @@ export class GameView {
       .catch(() => {}); // cosmetic: play without the hero if it fails to load
     this.scene.fog = new THREE.FogExp2(0x05070f, 0.16);
     // MSAA on the composer's target: the post pipeline bypasses the canvas
-    // multisample buffer, so without this every edge aliases on DPR-1 screens
-    // and the whole frame reads low-res.
+    // multisample buffer, so without this every edge aliases on DPR-1 screens.
+    // The target must be DRAWING-BUFFER sized: EffectComposer never resizes a
+    // custom target on its own, and a CSS-sized one renders the whole frame at
+    // 1x and upscales - big pixels on every DPR>1 screen until a resize fires.
+    const buf = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     this.composer = new EffectComposer(
       this.renderer,
-      new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: 4, type: THREE.HalfFloatType }),
+      new THREE.WebGLRenderTarget(buf.x, buf.y, { samples: 4, type: THREE.HalfFloatType }),
     );
     this.scene.add(this.worldGroup, this.co2Group);
     this.worldGroup.add(this.propsGroup, this.nightGroup);
@@ -194,6 +197,7 @@ export class GameView {
     const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.85, 0.55);
     this.composer.addPass(bloom);
     this.composer.addPass(new OutputPass());
+    this.composer.setSize(innerWidth, innerHeight); // align internal sizes with the buffer
 
     addEventListener("resize", () => {
       this.camera.aspect = innerWidth / innerHeight;

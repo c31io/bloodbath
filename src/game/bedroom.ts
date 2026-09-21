@@ -37,7 +37,16 @@ export interface RoomObject {
 const HALF_PI = Math.PI / 2;
 
 /** The one placement vocabulary: one row per object in the Bedroom, gameplay and visuals.
- *  Models are Quaternius (CC0) via poly.pizza. */
+ *  Models are Quaternius (CC0) via poly.pizza.
+ *
+ *  Orientation: glTF files carry no facing metadata — there is no convention to lean on,
+ *  so every row's rotX/rotY/rotZ (applied ZYX, see props.ts) was tuned by eye against
+ *  rendered screenshots. Facings observed as loaded, before the row's own rotation:
+ *  - man-a stands upright facing +Z; the sleeper row lays him on his back, face up,
+ *    head toward -X, feet toward +X (his breath anchor sits at the -X end, his face).
+ *  - cat-a faces +Z as loaded; its breath anchor sits just +Z of the body.
+ *  - phone lies screen-up after rotX -HALF_PI (checked from overhead).
+ *  - chalice, bowl, plants, night-stand are rotationally symmetric — facing immaterial. */
 export const BEDROOM = {
   // The sleeper is skinned: placement measures his posed bounds after an explicit
   // skeleton settlement (see loadProps) — a plain Box3 would see bind-pose vertices.
@@ -68,7 +77,8 @@ export const BEDROOM = {
     [-0.93, 0.67, -0.7, -0.82, 0.77, -0.5],
     [-0.93, 0.67, 0.5, -0.82, 0.77, 0.7],
   ] } },
-  sleeper: { anchor: { x: 2.2, y: 0.6, z: 0.4 }, model: { file: "man-a", pos: [2.15, 0.3, 0.4], size: 1.75, rotY: HALF_PI, rotZ: HALF_PI, solid: [
+  // head -X / feet +X; pos.x keeps the feet ~3.5cm clear of the east wall (x = 3)
+  sleeper: { anchor: { x: 2.2, y: 0.6, z: 0.4 }, model: { file: "man-a", pos: [2.09, 0.3, 0.4], size: 1.75, rotY: HALF_PI, rotZ: HALF_PI, solid: [
     [-0.88, 0, -0.17, 0.88, 0.2, -0.09],
     [-0.88, 0, -0.09, 0.68, 0.1, 0.17],
     [-0.58, 0, -0.26, -0.39, 0.2, -0.17],

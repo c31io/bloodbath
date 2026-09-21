@@ -1,8 +1,8 @@
 import type { World } from "../ecs/ecs.js";
 import { drainEnergy, FEED_ENERGY_REGEN, sipNectar } from "../domain/resources.js";
-import { tickHost } from "../domain/suspicion.js";
+import { tickHost, type HostKind } from "../domain/suspicion.js";
 import { PLUME_COUNT, type EggSpotC, type FemalePath, type Fan, type Host, type Mosquito, type Plant, type Plume, type Pos } from "./components.js";
-import { ROOM, SOLIDS } from "./bedroom.js";
+import { HOST_SOLIDS, ROOM, SOLIDS } from "./bedroom.js";
 import {
   DAWN_SECONDS,
   playerState,
@@ -26,6 +26,36 @@ export const COURTSHIP_TOLERANCE = 0.4;
 export const COURTSHIP_RESONANCE_RATE = 14;
 export const COURTSHIP_LOSE_RATE = 40;
 
+/** Nearest point on a host's body boxes to p, pushed 6cm out along the local
+ *  surface normal: the landing perch. Attaching here keeps the touchdown
+ *  spot (the old anchor snap teleported the player up to LAND_RANGE away,
+ *  and for the cat the anchor sat inside the mesh). */
+function perchPoint(kind: HostKind, px: number, py: number, pz: number): Pos {
+  let bx = px, by = py, bz = pz, nx = 0, ny = 1, nz = 0, bd = Infinity;
+  for (const b of HOST_SOLIDS[kind]) {
+    const cx = Math.min(Math.max(px, b.minX), b.maxX);
+    const cy = Math.min(Math.max(py, b.minY), b.maxY);
+    const cz = Math.min(Math.max(pz, b.minZ), b.maxZ);
+    const gx = px - cx, gy = py - cy, gz = pz - cz;
+    const d = Math.hypot(gx, gy, gz);
+    if (d >= bd) continue;
+    bd = d;
+    bx = cx; by = cy; bz = cz;
+    if (d > 0) {
+      nx = gx / d; ny = gy / d; nz = gz / d;
+    } else {
+      // inside: exit along the least-penetrated face, same rule as the resolver
+      const face = Math.min(px - b.minX, b.maxX - px, py - b.minY, b.maxY - py, pz - b.minZ, b.maxZ - pz);
+      if (face === px - b.minX) { nx = 1; ny = 0; nz = 0; }
+      else if (face === b.maxX - px) { nx = -1; ny = 0; nz = 0; }
+      else if (face === py - b.minY) { nx = 0; ny = 1; nz = 0; }
+      else if (face === b.maxY - py) { nx = 0; ny = -1; nz = 0; }
+      else if (face === pz - b.minZ) { nx = 0; ny = 0; nz = 1; }
+      else { nx = 0; ny = 0; nz = -1; }
+    }
+  }
+  return { x: bx + nx * 0.06, y: by + ny * 0.06, z: bz + nz * 0.06 };
+}
 function frozen(night: NightState): boolean {
   return night.dawn <= 0 || night.outcome !== "alive";
 }
@@ -118,9 +148,9 @@ export function registerLogicSystems(world: NightWorld): void {
 
     if (mosquito.landedOn !== null) {
       const hostPos = w.get<Pos>(mosquito.landedOn, "pos")!;
-      pos.x = hostPos.x;
-      pos.y = hostPos.y + 0.06;
-      pos.z = hostPos.z;
+      pos.x = hostPos.x + mosquito.perch.x;
+      pos.y = hostPos.y + mosquito.perch.y;
+      pos.z = hostPos.z + mosquito.perch.z;
       vel.x = 0;
       vel.y = 0;
       vel.z = 0;
@@ -194,11 +224,15 @@ export function registerLogicSystems(world: NightWorld): void {
       else { pos.z = face; vel.z *= -0.2; }
     }
 
-    // landing: interact near a Host
+    // landing: interact near a Host — perch on the body where you touched down
     if (input.interactPressed) {
       for (const id of w.query("host")) {
         const hp = w.get<Pos>(id, "pos")!;
         if (Math.hypot(hp.x - pos.x, hp.y - pos.y, hp.z - pos.z) < LAND_RANGE) {
+          const perch = perchPoint(w.get<Host>(id, "host")!.kind, pos.x, pos.y, pos.z);
+          mosquito.perch.x = perch.x - hp.x;
+          mosquito.perch.y = perch.y - hp.y;
+          mosquito.perch.z = perch.z - hp.z;
           mosquito.landedOn = id;
           break;
         }

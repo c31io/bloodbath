@@ -1,6 +1,6 @@
 import type { World } from "../ecs/ecs.js";
 import { makePool } from "../domain/resources.js";
-import { createHostState } from "../domain/suspicion.js";
+import { createHostState, type HostKind } from "../domain/suspicion.js";
 import { makePlume, type Pos } from "./components.js";
 
 /** Bedroom shell: x in [-3,3], z in [-2.5,2.5], y in [0,3]. */
@@ -215,25 +215,36 @@ export interface SolidBox {
   maxZ: number;
 }
 
+/** World-space boxes of a model row's colliders (rotations are pre-baked into
+ *  the authored relative boxes). */
+const worldBoxes = (m: RoomObject["model"]): SolidBox[] =>
+  !m?.solid
+    ? []
+    : m.solid.map(([x1, y1, z1, x2, y2, z2]) => ({
+        minX: m.pos[0] + x1,
+        maxX: m.pos[0] + x2,
+        minY: m.pos[1] + y1,
+        maxY: m.pos[1] + y2,
+        minZ: m.pos[2] + z1,
+        maxZ: m.pos[2] + z2,
+      }));
+
 /** Every static solid: the collider boxes of every solid model, plus the
  *  windowsill shelf (built by hand in view.buildRoom — keep the two in step).
  *  Derived from the table at module load, so a placement edit moves its
  *  colliders with it. */
 export const SOLIDS: SolidBox[] = [
-  ...(Object.values(BEDROOM) as RoomObject[]).flatMap((obj): SolidBox[] => {
-    const m = obj.model;
-    if (!m?.solid) return [];
-    return m.solid.map(([x1, y1, z1, x2, y2, z2]) => ({
-      minX: m.pos[0] + x1,
-      maxX: m.pos[0] + x2,
-      minY: m.pos[1] + y1,
-      maxY: m.pos[1] + y2,
-      minZ: m.pos[2] + z1,
-      maxZ: m.pos[2] + z2,
-    }));
-  }),
+  ...(Object.values(BEDROOM) as RoomObject[]).flatMap((obj) => worldBoxes(obj.model)),
   { minX: -0.55, maxX: 0.55, minY: 1.35, maxY: 1.41, minZ: -2.52, maxZ: -2.2 },
 ];
+
+/** Body boxes of the landable hosts: landing perches on the nearest surface
+ *  point of these instead of snapping to the anchor, so the mosquito attaches
+ *  where it touched down — and never inside the mesh. Derived like SOLIDS. */
+export const HOST_SOLIDS: Record<HostKind, SolidBox[]> = {
+  human: worldBoxes(BEDROOM.sleeper.model),
+  cat: worldBoxes(BEDROOM.cat.model),
+};
 
 /** Spawn every static Bedroom entity: Hosts, hot decoys, Egg Spots, Nectar plants, the fan. */
 export function buildBedroom<R>(world: World<R>): void {

@@ -40,6 +40,7 @@ export function startNight(colony: Colony, character: OffspringCard, opts: Start
     sex: character.sex,
     energy: mods.maxEnergy,
     landedOn: null,
+    perch: { x: 0, y: 0, z: 0 },
     feeding: false,
     alive: true,
     yaw: 0,

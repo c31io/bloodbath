@@ -25,6 +25,8 @@ export interface Mosquito extends Mods {
   sex: Sex;
   energy: number;
   landedOn: number | null;
+  /** attach offset from the host's pos while landed: where on the body you touched down */
+  perch: Pos;
   feeding: boolean;
   alive: boolean;
   yaw: number;

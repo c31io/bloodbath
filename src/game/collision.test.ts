@@ -62,6 +62,22 @@ describe("solid furniture", () => {
     expect(p.mosquito.landedOn).toBe(hostOfKind(world, "human"));
   });
 
+  it("perches where you touch down — on the body surface, not at the anchor", () => {
+    const world: NightWorld = startNight(newColony(), FOUNDER_CARD, {
+      rng: FAIR_RNG,
+      worldScale: 1,
+      input: input({ interactPressed: true }),
+    });
+    const p = playerState(world)!;
+    Object.assign(p.pos, { x: -1.5, y: 0.3, z: 1.9 }); // off the cat's north flank, in land range
+    tickWorld(world, 1 / 60); // land: perch recorded from the touch point
+    tickWorld(world, 1 / 60); // landed tick: pos moves onto the perch
+    expect(p.mosquito.landedOn).toBe(hostOfKind(world, "cat"));
+    expect(p.pos.z).toBeCloseTo(1.83, 5); // body face 1.77 + 0.06 standoff — never the anchor z 1.5
+    expect(p.pos.y).toBeCloseTo(0.3, 5); // stayed at the touched-down height
+    expect(insideAnySolid(p.pos)).toBe(false); // and never inside the mesh
+  });
+
   it("frees a player who ends up inside a floor-standing box", () => {
     const world: NightWorld = startNight(newColony(), FOUNDER_CARD, { rng: FAIR_RNG, worldScale: 1 });
     const p = playerState(world)!;

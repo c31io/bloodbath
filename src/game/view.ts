@@ -173,7 +173,13 @@ export class GameView {
       })
       .catch(() => {}); // cosmetic: play without the hero if it fails to load
     this.scene.fog = new THREE.FogExp2(0x05070f, 0.16);
-    this.scene.background = new THREE.Color(0x03040a);
+    // MSAA on the composer's target: the post pipeline bypasses the canvas
+    // multisample buffer, so without this every edge aliases on DPR-1 screens
+    // and the whole frame reads low-res.
+    this.composer = new EffectComposer(
+      this.renderer,
+      new THREE.WebGLRenderTarget(innerWidth, innerHeight, { samples: 4, type: THREE.HalfFloatType }),
+    );
     this.scene.add(this.worldGroup, this.co2Group);
     this.worldGroup.add(this.propsGroup, this.nightGroup);
 
@@ -184,7 +190,6 @@ export class GameView {
       for (const mesh of this.fallbacks) mesh.visible = false;
     });
 
-    this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.85, 0.55);
     this.composer.addPass(bloom);

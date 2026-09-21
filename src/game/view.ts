@@ -154,6 +154,7 @@ export class GameView {
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setSize(innerWidth, innerHeight);
 
     this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.02, 40);
     // The hero model rides the camera: it must be in the scene graph for

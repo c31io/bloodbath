@@ -261,10 +261,19 @@ export class GameView {
   /** Drop every per-Night mesh: binding twice must not double the scene. */
   private clearNight(): void {
     this.nightGroup.clear();
+    // co2Group holds only per-Night objects: plume points and the female mote.
+    // Detach and dispose them or old sessions ghost on as frozen trails.
+    for (const c of this.co2Group.children) {
+      const o = c as THREE.Points | THREE.Sprite;
+      if ((o as THREE.Points).isPoints) o.geometry.dispose(); // Sprite shares a module-level geometry
+      (o.material as THREE.Material).dispose();
+    }
+    this.co2Group.clear();
     this.fallbacks = [];
     this.glowBound.clear();
     this.spotRings.clear();
     this.plumes = [];
+    this.femaleMote = null;
     for (const m of this.glowMats) m.dispose();
     this.glowMats = [];
     this.heatGlow = [];

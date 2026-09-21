@@ -3,6 +3,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { BEDROOM, ROOM, type RoomObject } from "./bedroom.js";
 import { windAt } from "./systems.js";
 import { loadProps } from "./props.js";
@@ -139,12 +140,38 @@ export class GameView {
   private femaleMote: THREE.Sprite | null = null;
   private idleAngle = 0;
   private clock = new THREE.Clock();
-
+  // The hero: the player's own mosquito body. A camera child in play (the
+  // lower-center "you" silhouette), a hovering showpiece on the menu. Wings
+  // are named pivot groups in the GLB; the abdomen group pulses while feeding.
+  private heroPivot = new THREE.Group();
+  private heroModel: THREE.Group | null = null;
+  private heroWingR: THREE.Object3D | null = null;
+  private heroWingL: THREE.Object3D | null = null;
+  private heroAbdomen: THREE.Object3D | null = null;
+  private heroMode: "menu" | "fp" | null = null;
+  private heroAir = 1; // 1 flying, 0 landed
+  private flapPhase = 0;
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.renderer.setSize(innerWidth, innerHeight);
+
     this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.02, 40);
+    // The hero model rides the camera: it must be in the scene graph for
+    // camera children to render.
+    this.scene.add(this.camera);
+    void new GLTFLoader()
+      .loadAsync("models/mosquito.glb")
+      .then((gltf) => {
+        this.heroModel = gltf.scene;
+        this.heroModel.scale.setScalar(0.2);
+        this.heroModel.rotation.y = Math.PI; // authored facing +Z; fly nose-first
+        this.heroWingR = this.heroModel.getObjectByName("wingR") ?? null;
+        this.heroWingL = this.heroModel.getObjectByName("wingL") ?? null;
+        this.heroAbdomen = this.heroModel.getObjectByName("abdomen") ?? null;
+        this.heroPivot.add(this.heroModel);
+        this.propsGroup.add(this.heroPivot); // menu hover until a Night binds
+      })
+      .catch(() => {}); // cosmetic: play without the hero if it fails to load
     this.scene.fog = new THREE.FogExp2(0x05070f, 0.16);
     this.scene.background = new THREE.Color(0x03040a);
     this.scene.add(this.worldGroup, this.co2Group);
@@ -504,16 +531,69 @@ export class GameView {
       if (fanId !== undefined && this.fanBlades) {
         this.fanBlades.rotation.y = world.get<Fan>(fanId, "fan")!.angle;
       }
+
+      const vel = world.get<Pos>(ref.player, "vel")!;
+      this.updateHero(dt, t, world, m, vel);
     } else {
       this.idleAngle += dt * 0.12;
       this.camera.position.set(Math.cos(this.idleAngle) * 1.6, 1.6 + Math.sin(this.idleAngle * 0.7) * 0.3, Math.sin(this.idleAngle) * 1.4);
       this.camera.lookAt(0.8, 0.9, 0);
       if (this.fanBlades) this.fanBlades.rotation.y += dt * 1.5;
+      this.updateHero(dt, t, null, null, null);
     }
 
     this.worldGroup.visible = channels.world;
     this.co2Group.visible = channels.co2;
     this.composer.render();
+  }
+
+  /** Hero pose + flap. In play it rides the camera (the lower-center "you");
+   *  wings buzz while flying, fold flat when landed, and the belly swells
+   *  while feeding. On the menu it hovers at the idle look target, facing
+   *  the drifting camera. Cosmetic only — never touches the sim. */
+  private updateHero(dt: number, t: number, world: NightWorld | null, m: Mosquito | null, vel: Pos | null): void {
+    if (!this.heroModel) return;
+    const mode = world ? "fp" : "menu";
+    if (this.heroMode !== mode) {
+      this.heroPivot.removeFromParent();
+      (mode === "fp" ? this.camera : this.propsGroup).add(this.heroPivot);
+      this.heroMode = mode;
+    }
+
+    // 1 flying, 0 landed; eases over ~0.25 s on takeoff and touchdown
+    if (m) this.heroAir += ((m.landedOn !== null ? 0 : 1) - this.heroAir) * Math.min(1, dt * 7);
+    else this.heroAir = 1;
+    const air = this.heroAir;
+
+    // wing flap: fast buzz in flight (faster with speed), a slow sweep on the
+    // menu, stillness when landed. Pivots rotate around the body axis.
+    const speed = vel ? Math.hypot(vel.x, vel.y, vel.z) : 0;
+    const rate = mode === "menu" ? 4.5 : 13 + 9 * Math.min(speed, 2.2);
+    if (air > 0.02) this.flapPhase = (this.flapPhase + dt * rate * air) % 1;
+    const buzz = Math.sin(this.flapPhase * Math.PI * 2);
+    const base = mode === "menu" ? 0.35 : 0.5;
+    const osc = mode === "menu" ? 0.28 : 0.42;
+    const theta = (1 - air) * 0.06 + air * (base + osc * buzz);
+    if (this.heroWingR) this.heroWingR.rotation.z = theta;
+    if (this.heroWingL) this.heroWingL.rotation.z = -theta;
+    if (mode === "fp" && m && vel) {
+      // body: bob and sway with the flap beat, pitch with vertical speed
+      const bob = air * 0.006 * Math.sin(this.flapPhase * Math.PI + 1);
+      this.heroPivot.position.set(0, -0.165 - 0.025 * (1 - air) + bob, -0.3);
+      this.heroPivot.rotation.set(0, 0, 0);
+      const climb = Math.max(-0.25, Math.min(0.25, vel.y * 0.15)) * air;
+      const sway = air * 0.045 * Math.sin(this.flapPhase * Math.PI);
+      this.heroModel.rotation.set(-climb + sway * 0.6, Math.PI, sway, "YXZ");
+      if (this.heroAbdomen) {
+        this.heroAbdomen.scale.setScalar(m.feeding ? 1 + 0.06 * Math.sin(t * 6) : 1);
+      }
+    } else {
+      // menu showpiece: hover at the idle look target, nose toward the camera
+      this.heroPivot.position.set(0.8, 1.02 + 0.04 * Math.sin(t * 2.1), 0);
+      this.heroPivot.rotation.set(0, Math.atan2(this.camera.position.x - 0.8, this.camera.position.z), 0, "YXZ");
+      this.heroModel.rotation.set(0, 0, 0, "YXZ");
+      if (this.heroAbdomen) this.heroAbdomen.scale.setScalar(1);
+    }
   }
 
   /** Entity id under normalized device coordinates, for the inspector. */

@@ -49,11 +49,12 @@ export function buildMosquito(): THREE.Group {
   // Abdomen: egg tilted up-back, striped toward the tail.
   const abdoDir = V(0, 0.55, -0.84);
   const abdoPos = V(0, 0.4, -0.42);
-  const abdomen = add(
-    new THREE.Mesh(new THREE.CapsuleGeometry(0.145, 0.34, 5, 14), mat(BODY)),
-  );
+  const abdoGroup = new THREE.Group();
+  abdoGroup.name = "abdomen";
+  const abdomen = new THREE.Mesh(new THREE.CapsuleGeometry(0.145, 0.34, 5, 14), mat(BODY));
   abdomen.quaternion.copy(alongY(abdoDir));
   abdomen.position.copy(abdoPos);
+  abdoGroup.add(abdomen);
   // stripe bands ring the abdomen axis (torus axis is +Z)
   for (const [t, r] of [
     [-0.05, 0.148],
@@ -61,12 +62,14 @@ export function buildMosquito(): THREE.Group {
     [-0.19, 0.143],
     [-0.25, 0.136],
   ] as const) {
-    const band = add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.016, 8, 16), mat(STRIPE)));
+    const band = new THREE.Mesh(new THREE.TorusGeometry(r, 0.016, 8, 16), mat(STRIPE));
     band.quaternion.copy(
       new THREE.Quaternion().setFromUnitVectors(V(0, 0, 1), abdoDir.clone().normalize()),
     );
     band.position.copy(abdoPos.clone().add(abdoDir.clone().normalize().multiplyScalar(t)));
+    abdoGroup.add(band);
   }
+  g.add(abdoGroup);
 
   // Thorax between head and abdomen.
   const thorax = add(new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), mat(BODY)));
@@ -104,13 +107,21 @@ export function buildMosquito(): THREE.Group {
   beak.quaternion.copy(alongY(beakDir));
   beak.position.copy(beakBase).add(beakDir.clone().multiplyScalar(0.225));
 
-  // Wings: two long flat pale blades raised in a V, swept back like the reference.
+  // Wings: two long flat pale blades on named pivot groups at the thorax top
+  // ("wingR"/"wingL", +X/-X). Blades are authored near-flat along the body;
+  // the view flaps them around the pivots' Z (the body-forward axis), which
+  // lifts each blade sideways through the V pose.
   for (const s of [1, -1]) {
-    const dir = V(0.7 * s, 0.6, -0.35).normalize();
-    const wing = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.5, 4, 10), mat(WING, { transparent: true, opacity: 0.8 })));
+    const pivot = new THREE.Group();
+    pivot.name = s === 1 ? "wingR" : "wingL";
+    pivot.position.set(0.05 * s, 0.44, -0.02);
+    const dir = V(0.95 * s, 0.08, -0.3).normalize();
+    const wing = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.5, 4, 10), mat(WING, { transparent: true, opacity: 0.8 }));
     wing.scale.z = 0.22;
     wing.quaternion.copy(alongY(dir));
-    wing.position.set(0.05 * s, 0.44, -0.02).add(dir.clone().multiplyScalar(0.34));
+    wing.position.copy(dir.clone().multiplyScalar(0.36));
+    pivot.add(wing);
+    g.add(pivot);
   }
 
   // Legs: three two-segment pairs, splayed under the body, dark tips.

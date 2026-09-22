@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { FOUNDER_CARD, newColony } from "../domain/colony.js";
 import { startNight } from "./flow.js";
 import { hostOfKind, playerState, tickWorld, type NightInput, type NightWorld } from "./night.js";
-import { SOLIDS } from "./bedroom.js";
+import { bodyOffset } from "./systems.js";
+import { HERO_BODY } from "./components.js";
+import { ROOM, SOLIDS } from "./bedroom.js";
 
 const FAIR_RNG = () => 0.5;
 
@@ -62,6 +64,17 @@ describe("solid furniture", () => {
     expect(p.mosquito.landedOn).toBe(hostOfKind(world, "human"));
   });
 
+  it("clamps a wall-adjacent perch back inside the room shell", () => {
+    const world: NightWorld = startNight(newColony(), FOUNDER_CARD, { rng: FAIR_RNG, worldScale: 1 });
+    const p = playerState(world)!;
+    p.mosquito.landedOn = hostOfKind(world, "human");
+    p.mosquito.perch.x = 0.9; // host x 2.09 + 0.9 = 2.99: past the shell standoff
+    p.mosquito.perch.y = 0.1;
+    p.mosquito.perch.z = 0;
+    tickWorld(world, 1 / 60); // landed tick applies the perch, then clamps
+    expect(p.pos.x).toBeCloseTo(ROOM.maxX - 0.06, 5); // eye held off the east wall
+    expect(insideAnySolid(p.pos)).toBe(false);
+  });
   it("perches where you touch down — on the body surface, not at the anchor", () => {
     const world: NightWorld = startNight(newColony(), FOUNDER_CARD, {
       rng: FAIR_RNG,
@@ -99,7 +112,9 @@ describe("solid furniture", () => {
     p.mosquito.yaw = Math.PI / 2; // forward = (-1, 0, 0): straight through
     p.mosquito.pitch = 0;
     for (let i = 0; i < 60; i++) tickWorld(world, 1 / 30);
-    expect(p.pos.x).toBeLessThan(-2.85); // reached the west wall: the old AABB would have stopped it
+    expect(p.pos.x).toBeLessThan(-2.2); // through the desk: only the body at the west wall ends it
+    const tip = bodyOffset(Math.PI / 2, 0); // the body rides 0.55 west of the eye
+    expect(p.pos.x + tip.x).toBeGreaterThanOrEqual(ROOM.minX + HERO_BODY.margin - 1e-6); // nose rests on the wall
   });
 
   it("lets a player fly under the bed frame, through where its bounding box lies", () => {
@@ -113,6 +128,20 @@ describe("solid furniture", () => {
     p.mosquito.yaw = -Math.PI / 2; // forward = (1, 0, 0): straight through
     p.mosquito.pitch = 0;
     for (let i = 0; i < 75; i++) tickWorld(world, 1 / 30);
-    expect(p.pos.x).toBeGreaterThan(2.85); // reached the east wall: the old AABB would have stopped it
+    expect(p.pos.x).toBeGreaterThan(2.2); // through the frame: only the body at the east wall ends it
+    const tip = bodyOffset(-Math.PI / 2, 0); // the body rides 0.55 east of the eye
+    expect(p.pos.x + tip.x).toBeLessThanOrEqual(ROOM.maxX - HERO_BODY.margin + 1e-6); // nose rests on the wall
+  });
+
+  it("rests the body on a wall nose-first, with the camera holding back", () => {
+    const world: NightWorld = startNight(newColony(), FOUNDER_CARD, { rng: FAIR_RNG, worldScale: 1, input: input({ forward: true }) });
+    const p = playerState(world)!;
+    p.mosquito.yaw = 0; // forward = (0, 0, -1): straight at the south wall
+    p.mosquito.pitch = 0;
+    for (let i = 0; i < 90; i++) tickWorld(world, 1 / 30);
+    const tip = bodyOffset(0, 0);
+    expect(p.pos.z + tip.z).toBeCloseTo(ROOM.minZ + HERO_BODY.margin, 5); // nose rests on the wall surface
+    expect(p.pos.z).toBeGreaterThan(ROOM.minZ + 0.05); // the eye never crosses the shell
+    expect(insideAnySolid(p.pos)).toBe(false);
   });
 });

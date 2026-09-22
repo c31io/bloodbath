@@ -4,9 +4,10 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { BEDROOM, ROOM, type RoomObject } from "./bedroom.js";
+import { BEDROOM, ROOM, SOLIDS, type RoomObject } from "./bedroom.js";
 import { windAt } from "./systems.js";
 import { loadProps } from "./props.js";
+import { HERO_BODY } from "./components.js";
 import type { EggSpotC, Fan, Host, Hot, Mosquito, Plume, Pos } from "./components.js";
 import type { NightWorld } from "./night.js";
 import { playerState } from "./night.js";
@@ -148,6 +149,9 @@ export class GameView {
   private heroWingR: THREE.Object3D | null = null;
   private heroWingL: THREE.Object3D | null = null;
   private heroAbdomen: THREE.Object3D | null = null;
+  /** eased pivot-retraction factor: 1 = full body offset, <1 = pulled in
+   *  against nearby geometry (model rescaled to hold apparent size) */
+  private heroF = 1;
   private heroMode: "menu" | "fp" | null = null;
   private heroAir = 1; // 1 flying, 0 landed
   private flapPhase = 0;
@@ -568,6 +572,7 @@ export class GameView {
       this.heroPivot.removeFromParent();
       (mode === "fp" ? this.camera : this.propsGroup).add(this.heroPivot);
       this.heroMode = mode;
+      this.heroF = 1;
     }
 
     // 1 flying, 0 landed; eases over ~0.25 s on takeoff and touchdown
@@ -587,10 +592,37 @@ export class GameView {
     if (this.heroWingR) this.heroWingR.rotation.z = theta;
     if (this.heroWingL) this.heroWingL.rotation.z = -theta;
     if (mode === "fp" && m && vel) {
+      // keep the visible body out of geometry: march the eye -> body-tip
+      // segment against walls, ceiling, and furniture; retract the pivot
+      // along its offset (rescaling the model to hold apparent size) until
+      // the tip clears. Floor excluded: low skimming reads fine clipped.
+      const off = new THREE.Vector3(0, -HERO_BODY.down, -(HERO_BODY.fwd + HERO_BODY.reach));
+      const len = off.length();
+      const dir = off.applyQuaternion(this.camera.quaternion).normalize();
+      const cam = this.camera.position;
+      const mg = HERO_BODY.margin;
+      let target = 0.12;
+      for (let s = 1; s >= 0.12; s -= 0.04) {
+        const px = cam.x + dir.x * len * s;
+        const py = cam.y + dir.y * len * s;
+        const pz = cam.z + dir.z * len * s;
+        const blocked =
+          px < ROOM.minX + mg || px > ROOM.maxX - mg ||
+          pz < ROOM.minZ + mg || pz > ROOM.maxZ - mg ||
+          py > ROOM.height - mg ||
+          SOLIDS.some((b) => px > b.minX - 0.02 && px < b.maxX + 0.02 && py > b.minY - 0.02 && py < b.maxY + 0.02 && pz > b.minZ - 0.02 && pz < b.maxZ + 0.02);
+        if (!blocked) {
+          target = s;
+          break;
+        }
+      }
+      this.heroF += (target - this.heroF) * Math.min(1, dt * 12);
+      const k = this.heroF;
       // body: bob and sway with the flap beat, pitch with vertical speed
       const bob = air * 0.006 * Math.sin(this.flapPhase * Math.PI + 1);
-      this.heroPivot.position.set(0, -0.165 - 0.025 * (1 - air) + bob, -0.3);
+      this.heroPivot.position.set(0, -HERO_BODY.down * k - 0.025 * (1 - air) + bob, -HERO_BODY.fwd * k);
       this.heroPivot.rotation.set(0, 0, 0);
+      this.heroModel.scale.setScalar(0.2 * k);
       const climb = Math.max(-0.25, Math.min(0.25, vel.y * 0.15)) * air;
       const sway = air * 0.045 * Math.sin(this.flapPhase * Math.PI);
       this.heroModel.rotation.set(-climb + sway * 0.6, Math.PI, sway, "YXZ");
@@ -599,13 +631,13 @@ export class GameView {
       }
     } else {
       // menu showpiece: hover at the idle look target, nose toward the camera
+      this.heroModel.scale.setScalar(0.2); // undo any fp retraction scale
       this.heroPivot.position.set(0.8, 1.02 + 0.04 * Math.sin(t * 2.1), 0);
       this.heroPivot.rotation.set(0, Math.atan2(this.camera.position.x - 0.8, this.camera.position.z), 0, "YXZ");
       this.heroModel.rotation.set(0, 0, 0, "YXZ");
       if (this.heroAbdomen) this.heroAbdomen.scale.setScalar(1);
     }
   }
-
   /** Entity id under normalized device coordinates, for the inspector. */
   raycastEntity(nx: number, ny: number): number | undefined {
     const ray = new THREE.Raycaster();

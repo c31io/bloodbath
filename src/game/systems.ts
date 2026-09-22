@@ -1,7 +1,7 @@
 import type { World } from "../ecs/ecs.js";
 import { drainEnergy, FEED_ENERGY_REGEN, sipNectar } from "../domain/resources.js";
 import { tickHost, type HostKind } from "../domain/suspicion.js";
-import { PLUME_COUNT, type EggSpotC, type FemalePath, type Fan, type Host, type Mosquito, type Plant, type Plume, type Pos } from "./components.js";
+import { HERO_BODY, PLUME_COUNT, type EggSpotC, type FemalePath, type Fan, type Host, type Mosquito, type Plant, type Plume, type Pos } from "./components.js";
 import { HOST_SOLIDS, ROOM, SOLIDS } from "./bedroom.js";
 import {
   DAWN_SECONDS,
@@ -56,6 +56,19 @@ function perchPoint(kind: HostKind, px: number, py: number, pz: number): Pos {
   }
   return { x: bx + nx * 0.06, y: by + ny * 0.06, z: bz + nz * 0.06 };
 }
+/** Camera-space offset of the body tip (nose and wings) for a view
+ *  orientation: the point the sim keeps out of the room shell so nose-first
+ *  flight rests the body ON the wall with the eye holding back. Matches the
+ *  fp hero mount in view.ts (YXZ yaw-pitch, roll is cosmetic only). */
+export function bodyOffset(yaw: number, pitch: number): Pos {
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const sy = Math.sin(yaw), cy = Math.cos(yaw);
+  const oy = -HERO_BODY.down, oz = -(HERO_BODY.fwd + HERO_BODY.reach);
+  const y1 = oy * cp - oz * sp;
+  const z1 = oy * sp + oz * cp;
+  return { x: sy * z1, y: y1, z: cy * z1 };
+}
+
 function frozen(night: NightState): boolean {
   return night.dawn <= 0 || night.outcome !== "alive";
 }
@@ -151,6 +164,11 @@ export function registerLogicSystems(world: NightWorld): void {
       pos.x = hostPos.x + mosquito.perch.x;
       pos.y = hostPos.y + mosquito.perch.y;
       pos.z = hostPos.z + mosquito.perch.z;
+      // perches can reach past the shell (the sleeper lies against the east
+      // wall): hold the eye a near-plane-clearing distance inside the room
+      pos.x = Math.max(ROOM.minX + 0.06, Math.min(ROOM.maxX - 0.06, pos.x));
+      pos.y = Math.max(0.04, Math.min(ROOM.height - 0.06, pos.y));
+      pos.z = Math.max(ROOM.minZ + 0.06, Math.min(ROOM.maxZ - 0.06, pos.z));
       vel.x = 0;
       vel.y = 0;
       vel.z = 0;
@@ -200,28 +218,59 @@ export function registerLogicSystems(world: NightWorld): void {
       pos.z = Math.max(ROOM.minZ + 0.05, Math.min(ROOM.maxZ - 0.05, pos.z));
       vel.z *= -0.2;
     }
-    if (pos.y < 0.03 || pos.y > ROOM.height - 0.05) {
-      pos.y = Math.max(0.03, Math.min(ROOM.height - 0.05, pos.y));
-      vel.y *= -0.2;
-    }
-
     // static furniture: push out of the least-penetrated face that the room
     // shell would not immediately undo (a box face behind a wall clamp or the
-    // floor is not an exit), then damped bounce on that axis
+    // floor is not an exit), then damped bounce on that axis. Placement sits
+    // a near-plane-clearing 2.5cm off the face so pressing against furniture
+    // never renders from inside its mesh.
     for (const s of SOLIDS) {
       if (pos.x <= s.minX || pos.x >= s.maxX || pos.y <= s.minY || pos.y >= s.maxY || pos.z <= s.minZ || pos.z >= s.maxZ) continue;
-      const exits: Array<[number, "x" | "y" | "z", number]> = [];
-      if (ROOM.minX + 0.05 <= s.minX) exits.push([pos.x - s.minX, "x", s.minX]);
-      if (s.maxX <= ROOM.maxX - 0.05) exits.push([s.maxX - pos.x, "x", s.maxX]);
-      if (0.03 <= s.minY) exits.push([pos.y - s.minY, "y", s.minY]);
-      if (s.maxY <= ROOM.height - 0.05) exits.push([s.maxY - pos.y, "y", s.maxY]);
-      if (ROOM.minZ + 0.05 <= s.minZ) exits.push([pos.z - s.minZ, "z", s.minZ]);
-      if (s.maxZ <= ROOM.maxZ - 0.05) exits.push([s.maxZ - pos.z, "z", s.maxZ]);
+      const exits: Array<[number, "x" | "y" | "z", number, number]> = [];
+      if (ROOM.minX + 0.05 <= s.minX) exits.push([pos.x - s.minX, "x", Math.max(ROOM.minX + 0.05, s.minX - 0.025), s.minX]);
+      if (s.maxX <= ROOM.maxX - 0.05) exits.push([s.maxX - pos.x, "x", Math.min(ROOM.maxX - 0.05, s.maxX + 0.025), s.maxX]);
+      if (0.03 <= s.minY) exits.push([pos.y - s.minY, "y", Math.max(0.03, s.minY - 0.025), s.minY]);
+      if (s.maxY <= ROOM.height - 0.05) exits.push([s.maxY - pos.y, "y", Math.min(ROOM.height - 0.05, s.maxY + 0.025), s.maxY]);
+      if (ROOM.minZ + 0.05 <= s.minZ) exits.push([pos.z - s.minZ, "z", Math.max(ROOM.minZ + 0.05, s.minZ - 0.025), s.minZ]);
+      if (s.maxZ <= ROOM.maxZ - 0.05) exits.push([s.maxZ - pos.z, "z", Math.min(ROOM.maxZ - 0.05, s.maxZ + 0.025), s.maxZ]);
       if (exits.length === 0) continue;
-      const [, axis, face] = exits.reduce((a, b) => (b[0] < a[0] ? b : a));
-      if (axis === "x") { pos.x = face; vel.x *= -0.2; }
-      else if (axis === "y") { pos.y = face; vel.y *= -0.2; }
-      else { pos.z = face; vel.z *= -0.2; }
+      const [, axis, place, raw] = exits.reduce((a, b) => (b[0] < a[0] ? b : a));
+      const c = { x: pos.x, y: pos.y, z: pos.z };
+      if (axis === "x") c.x = place;
+      else if (axis === "y") c.y = place;
+      else c.z = place;
+      // the standoff can land inside a neighbor (the vase on the nightstand
+      // top): fall back to the bare face, which bounds both boxes exactly
+      if (SOLIDS.some((s) => c.x > s.minX && c.x < s.maxX && c.y > s.minY && c.y < s.maxY && c.z > s.minZ && c.z < s.maxZ)) {
+        if (axis === "x") c.x = raw;
+        else if (axis === "y") c.y = raw;
+        else c.z = raw;
+      }
+      pos.x = c.x;
+      pos.y = c.y;
+      pos.z = c.z;
+      if (axis === "x") vel.x *= -0.2;
+      else if (axis === "y") vel.y *= -0.2;
+      else vel.z *= -0.2;
+    }
+    // the hero body rides ahead of the eye: nose-first flight rests the body
+    // ON the wall with the camera holding back. Walls + ceiling only — floor
+    // skimming and narrow furniture gaps stay flyable; skipped when the push
+    // would shove the eye into furniture the resolver just cleared.
+    const o = bodyOffset(mosquito.yaw, mosquito.pitch);
+    const bx = pos.x + o.x, bz = pos.z + o.z;
+    const m = HERO_BODY.margin;
+    if (bx < ROOM.minX + m || bx > ROOM.maxX - m || bz < ROOM.minZ + m || bz > ROOM.maxZ - m || pos.y + o.y > ROOM.height - m) {
+      const nx = bx < ROOM.minX + m ? ROOM.minX + m - bx : bx > ROOM.maxX - m ? ROOM.maxX - m - bx : 0;
+      const nz = bz < ROOM.minZ + m ? ROOM.minZ + m - bz : bz > ROOM.maxZ - m ? ROOM.maxZ - m - bz : 0;
+      const ny = pos.y + o.y > ROOM.height - m ? ROOM.height - m - (pos.y + o.y) : 0;
+      if (!SOLIDS.some((s) => pos.x + nx > s.minX && pos.x + nx < s.maxX && pos.y + ny > s.minY && pos.y + ny < s.maxY && pos.z + nz > s.minZ && pos.z + nz < s.maxZ)) {
+        pos.x += nx;
+        pos.y += ny;
+        pos.z += nz;
+        if (nx !== 0) vel.x *= -0.2;
+        if (ny !== 0) vel.y *= -0.2;
+        if (nz !== 0) vel.z *= -0.2;
+      }
     }
 
     // landing: interact near a Host — perch on the body where you touched down

@@ -99,3 +99,10 @@ export const COMPONENT_NAMES = [
   "femalePath",
   "plume",
 ] as const;
+
+/** The visible hero body rides ahead of and below the eye (the fp camera):
+ *  pivot at down/fwd, nose and wings reaching `reach` further. The sim keeps
+ *  the tip out of the room shell (walls + ceiling) so nose-first flight rests
+ *  the body ON the surface with the camera holding back; the view retracts
+ *  the pivot by the same measure so the graphic never enters geometry. */
+export const HERO_BODY = { down: 0.165, fwd: 0.3, reach: 0.25, margin: 0.05 };

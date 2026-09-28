@@ -34,7 +34,7 @@ export class Tutorial {
       const hp = posOf(world, hostOfKind(world, "human"));
       if (Math.hypot(hp.x - p.pos.x, hp.y - p.pos.y, hp.z - p.pos.z) < 2.6) s = 2;
     }
-    if (s === 2 && p.mosquito.landedOn !== null) s = 3;
+    if (s === 2 && p.mosquito.landedOn !== null && world.get(p.mosquito.landedOn, "host")) s = 3;
     if (s === 3 && night.blood >= 0.5) s = 4;
     if (s === 4 && night.laidEggs) s = 5;
     this.stage = s;

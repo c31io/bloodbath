@@ -13,6 +13,8 @@ You are a female mosquito hunting in a dark bedroom at 3 AM. The world has no ey
 
 Feed on the human (4 ml of blood, watch their suspicion — get swatted at high suspicion) or the cat (1.2 ml, wary). Sip nectar to stay alive. At an Egg Spot, convert blood into a Brood draw: the more blood carried, the more cards, and the Spot's quality caps their rarity. Pick one — it becomes the mosquito you play next Night.
 
+Click within reach of a Host or furniture collider to land where you touch it. Hold on a Host to feed; other surfaces are safe perches. Press `Space` to take off. A closer Nectar plant or Egg Spot takes priority over a Host; both take priority over furniture.
+
 Play the male instead (from the menu) for a different Night: courtship is a mirror-flight dogfight over a duet that decays if you drift.
 
 Dynasty Collapse ends the run at Population zero — Skills bank, SP persist, generation advances.
@@ -24,9 +26,9 @@ Dynasty Collapse ends the run at Population zero — Skills bank, SP persist, ge
 | Mouse | Steer (click the canvas to lock pointer) |
 | `W` | Fly forward |
 | `Shift` | Boost |
-| `Space` | Ascend |
+| `Space` | Ascend / take off |
 | `C` | Descend |
-| Left mouse | Land / sip / bite / lay (hold to feed) |
+| Left mouse | Land on a surface / sip Nectar / lay at an Egg Spot (hold on a Host to feed) |
 | `` ` `` | Dev instruments (sense channels, time dial, inspector) |
 
 ## Development

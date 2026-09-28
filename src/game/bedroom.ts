@@ -238,13 +238,11 @@ export const SOLIDS: SolidBox[] = [
   { minX: -0.55, maxX: 0.55, minY: 1.35, maxY: 1.41, minZ: -2.52, maxZ: -2.2 },
 ];
 
-/** Body boxes of the landable hosts: landing perches on the nearest surface
- *  point of these instead of snapping to the anchor, so the mosquito attaches
- *  where it touched down — and never inside the mesh. Derived like SOLIDS. */
-export const HOST_SOLIDS: Record<HostKind, SolidBox[]> = {
-  human: worldBoxes(BEDROOM.sleeper.model),
-  cat: worldBoxes(BEDROOM.cat.model),
-};
+/** All landable model surfaces use the same world-space boxes as free-flight
+ * collision. Host entities own their body boxes; other solids get entities. */
+export interface Collider {
+  boxes: SolidBox[];
+}
 
 /** Spawn every static Bedroom entity: Hosts, hot decoys, Egg Spots, Nectar plants, the fan. */
 export function buildBedroom<R>(world: World<R>): void {
@@ -257,11 +255,13 @@ export function buildBedroom<R>(world: World<R>): void {
 
   spawn(BEDROOM.bed.anchor, [
     ["host", { kind: "human", pool: makePool(4.0), state: createHostState("human") }],
+    ["collider", { boxes: worldBoxes(BEDROOM.sleeper.model) } satisfies Collider],
     ["hot", { strength: 0.9 }],
   ]);
   spawn(BEDROOM.bed.breath, [["plume", makePlume(BEDROOM.bed.breath, 1.0)]]);
   spawn(BEDROOM.cat.anchor, [
     ["host", { kind: "cat", pool: makePool(1.2), state: createHostState("cat") }],
+    ["collider", { boxes: worldBoxes(BEDROOM.cat.model) } satisfies Collider],
     ["hot", { strength: 0.7 }],
   ]);
   spawn(BEDROOM.cat.breath, [["plume", makePlume(BEDROOM.cat.breath, 0.6)]]);
@@ -276,5 +276,11 @@ export function buildBedroom<R>(world: World<R>): void {
   spawn(BEDROOM.pottedPlant.anchor, [["plant", { sips: 0 }]]);
   spawn(BEDROOM.windowsillPlant.anchor, [["plant", { sips: 0 }]]);
 
+
+  for (const [name, obj] of Object.entries(BEDROOM)) {
+    if (name === "sleeper" || name === "cat" || !obj.model?.solid) continue;
+    spawn(obj.anchor, [["collider", { boxes: worldBoxes(obj.model) } satisfies Collider]]);
+  }
+  spawn({ x: 0, y: 1.38, z: -2.36 }, [["collider", { boxes: [SOLIDS[SOLIDS.length - 1]!] } satisfies Collider]]);
   spawn(BEDROOM.fan.anchor, [["fan", { radius: 0.9, strength: 1.0, angle: 0, angularSpeed: Math.PI }]]);
 }

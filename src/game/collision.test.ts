@@ -64,6 +64,56 @@ describe("solid furniture", () => {
     expect(p.mosquito.landedOn).toBe(hostOfKind(world, "human"));
   });
 
+  it("lands on the human Host's head without entering its body, even far from the anchor", () => {
+    const world = startNight(newColony(), FOUNDER_CARD, {
+      rng: FAIR_RNG,
+      worldScale: 1,
+      input: input({ interactPressed: true }),
+    });
+    const p = playerState(world)!;
+    Object.assign(p.pos, { x: 1.38, y: 0.68, z: 0.4 });
+    tickWorld(world, 1 / 60);
+    expect(p.mosquito.landedOn).toBe(hostOfKind(world, "human"));
+    tickWorld(world, 1 / 60);
+    expect(insideAnySolid(p.pos)).toBe(false);
+    expect(p.pos.x).toBeCloseTo(1.38, 2);
+  });
+
+  it("lands on furniture without feeding, then takes off from the same surface", () => {
+    const world = startNight(newColony(), FOUNDER_CARD, {
+      rng: FAIR_RNG,
+      worldScale: 1,
+      input: input({ interactPressed: true, interactHeld: true }),
+    });
+    const p = playerState(world)!;
+    Object.assign(p.pos, { x: -1.95, y: 0.85, z: -1.3 });
+    tickWorld(world, 1 / 60);
+    expect(p.mosquito.landedOn).not.toBeNull();
+    expect(world.get(p.mosquito.landedOn!, "host")).toBeUndefined();
+    tickWorld(world, 1 / 60);
+    expect(p.pos.y).toBeCloseTo(0.69, 2);
+    expect(insideAnySolid(p.pos)).toBe(false);
+    expect(p.mosquito.feeding).toBe(false);
+    world.res.input.spacePressed = true;
+    tickWorld(world, 1 / 60);
+    expect(p.mosquito.landedOn).toBeNull();
+    expect(p.vel.y).toBeGreaterThan(0);
+  });
+
+  it("keeps a Host perch outside every solid after a click inside its collider", () => {
+    const world = startNight(newColony(), FOUNDER_CARD, {
+      rng: FAIR_RNG,
+      worldScale: 1,
+      input: input({ interactPressed: true }),
+    });
+    const p = playerState(world)!;
+    Object.assign(p.pos, { x: 2.2, y: 0.55, z: 0.4 });
+    tickWorld(world, 1 / 60);
+    expect(p.mosquito.landedOn).toBe(hostOfKind(world, "human"));
+    tickWorld(world, 1 / 60);
+    expect(insideAnySolid(p.pos)).toBe(false);
+  });
+
   it("clamps a wall-adjacent perch back inside the room shell", () => {
     const world: NightWorld = startNight(newColony(), FOUNDER_CARD, { rng: FAIR_RNG, worldScale: 1 });
     const p = playerState(world)!;

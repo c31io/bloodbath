@@ -25,7 +25,7 @@ export interface Mosquito extends Mods {
   sex: Sex;
   energy: number;
   landedOn: number | null;
-  /** attach offset from the host's pos while landed: where on the body you touched down */
+  /** attach offset from the landed entity's pos, at the touched surface */
   perch: Pos;
   feeding: boolean;
   alive: boolean;
@@ -92,6 +92,7 @@ export const COMPONENT_NAMES = [
   "vel",
   "mosquito",
   "host",
+  "collider",
   "hot",
   "eggSpot",
   "plant",

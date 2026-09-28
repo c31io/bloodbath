@@ -1,8 +1,7 @@
-import type { World } from "../ecs/ecs.js";
 import { drainEnergy, FEED_ENERGY_REGEN, sipNectar } from "../domain/resources.js";
-import { tickHost, type HostKind } from "../domain/suspicion.js";
+import { tickHost } from "../domain/suspicion.js";
 import { HERO_BODY, PLUME_COUNT, type EggSpotC, type FemalePath, type Fan, type Host, type Mosquito, type Plant, type Plume, type Pos } from "./components.js";
-import { HOST_SOLIDS, ROOM, SOLIDS } from "./bedroom.js";
+import { ROOM, SOLIDS, type Collider, type SolidBox } from "./bedroom.js";
 import {
   DAWN_SECONDS,
   playerState,
@@ -26,35 +25,79 @@ export const COURTSHIP_TOLERANCE = 0.4;
 export const COURTSHIP_RESONANCE_RATE = 14;
 export const COURTSHIP_LOSE_RATE = 40;
 
-/** Nearest point on a host's body boxes to p, pushed 6cm out along the local
- *  surface normal: the landing perch. Attaching here keeps the touchdown
- *  spot (the old anchor snap teleported the player up to LAND_RANGE away,
- *  and for the cat the anchor sat inside the mesh). */
-function perchPoint(kind: HostKind, px: number, py: number, pz: number): Pos {
-  let bx = px, by = py, bz = pz, nx = 0, ny = 1, nz = 0, bd = Infinity;
-  for (const b of HOST_SOLIDS[kind]) {
-    const cx = Math.min(Math.max(px, b.minX), b.maxX);
-    const cy = Math.min(Math.max(py, b.minY), b.maxY);
-    const cz = Math.min(Math.max(pz, b.minZ), b.maxZ);
-    const gx = px - cx, gy = py - cy, gz = pz - cz;
-    const d = Math.hypot(gx, gy, gz);
-    if (d >= bd) continue;
-    bd = d;
-    bx = cx; by = cy; bz = cz;
-    if (d > 0) {
-      nx = gx / d; ny = gy / d; nz = gz / d;
+/** Closest unobstructed perch on an entity's collider. Range is measured from
+ * the surface, not the entity anchor; a long Host can be reached at either end. */
+function nearestPerch(boxes: SolidBox[], pos: Pos): { point: Pos; distance: number } | null {
+  let nearest: { point: Pos; distance: number } | null = null;
+  for (const b of boxes) {
+    const x = Math.min(Math.max(pos.x, b.minX), b.maxX);
+    const y = Math.min(Math.max(pos.y, b.minY), b.maxY);
+    const z = Math.min(Math.max(pos.z, b.minZ), b.maxZ);
+    const dx = pos.x - x, dy = pos.y - y, dz = pos.z - z;
+    let distance = Math.hypot(dx, dy, dz);
+    if (distance >= LAND_RANGE || (nearest && distance >= nearest.distance)) continue;
+    let point: Pos;
+    if (distance > 0) {
+      point = { x: x + dx / distance * 0.06, y: y + dy / distance * 0.06, z: z + dz / distance * 0.06 };
     } else {
-      // inside: exit along the least-penetrated face, same rule as the resolver
-      const face = Math.min(px - b.minX, b.maxX - px, py - b.minY, b.maxY - py, pz - b.minZ, b.maxZ - pz);
-      if (face === px - b.minX) { nx = 1; ny = 0; nz = 0; }
-      else if (face === b.maxX - px) { nx = -1; ny = 0; nz = 0; }
-      else if (face === py - b.minY) { nx = 0; ny = 1; nz = 0; }
-      else if (face === b.maxY - py) { nx = 0; ny = -1; nz = 0; }
-      else if (face === pz - b.minZ) { nx = 0; ny = 0; nz = 1; }
-      else { nx = 0; ny = 0; nz = -1; }
+      // Exactly on a face: prefer the nearest outward face, not its interior.
+      const faces = [
+        pos.x - b.minX, b.maxX - pos.x,
+        pos.y - b.minY, b.maxY - pos.y,
+        pos.z - b.minZ, b.maxZ - pos.z,
+      ];
+      const face = faces.indexOf(Math.min(...faces));
+      point = { x: pos.x, y: pos.y, z: pos.z };
+      if (face === 0) point.x = b.minX - 0.06;
+      else if (face === 1) point.x = b.maxX + 0.06;
+      else if (face === 2) point.y = b.minY - 0.06;
+      else if (face === 3) point.y = b.maxY + 0.06;
+      else if (face === 4) point.z = b.minZ - 0.06;
+      else point.z = b.maxZ + 0.06;
+      distance = faces[face]!;
+    }
+    if (point.x < ROOM.minX + 0.06 || point.x > ROOM.maxX - 0.06 ||
+        point.y < 0.04 || point.y > ROOM.height - 0.06 ||
+        point.z < ROOM.minZ + 0.06 || point.z > ROOM.maxZ - 0.06) continue;
+    if (SOLIDS.some((s) => point.x > s.minX && point.x < s.maxX &&
+        point.y > s.minY && point.y < s.maxY && point.z > s.minZ && point.z < s.maxZ)) continue;
+    nearest = { point, distance };
+  }
+  return nearest;
+}
+
+function landOn(w: NightWorld, ids: number[], preferNearbyInteraction = false): void {
+  const p = playerState(w);
+  if (!p || p.mosquito.landedOn !== null) return;
+  let selected: { id: number; point: Pos; distance: number } | null = null;
+  for (const id of ids) {
+    const candidate = nearestPerch(w.get<Collider>(id, "collider")!.boxes, p.pos);
+    if (!candidate || (selected && candidate.distance >= selected.distance)) continue;
+    selected = { id, ...candidate };
+  }
+  if (!selected) return;
+  if (preferNearbyInteraction) {
+    for (const id of w.query("plant")) {
+      const anchor = w.get<Pos>(id, "pos")!;
+      const distance = Math.hypot(p.pos.x - anchor.x, p.pos.y - anchor.y, p.pos.z - anchor.z);
+      if (distance < SIP_RANGE && distance < selected.distance) return;
+    }
+    if (p.mosquito.sex === "female" && !w.res.night.laidEggs) {
+      for (const id of w.query("eggSpot")) {
+        if (w.get<EggSpotC>(id, "eggSpot")!.used) continue;
+        const anchor = w.get<Pos>(id, "pos")!;
+        const distance = Math.hypot(p.pos.x - anchor.x, p.pos.y - anchor.y, p.pos.z - anchor.z);
+        if (distance < SPOT_RANGE && distance < selected.distance) return;
+      }
     }
   }
-  return { x: bx + nx * 0.06, y: by + ny * 0.06, z: bz + nz * 0.06 };
+  const anchor = w.get<Pos>(selected.id, "pos")!;
+  p.mosquito.perch.x = selected.point.x - anchor.x;
+  p.mosquito.perch.y = selected.point.y - anchor.y;
+  p.mosquito.perch.z = selected.point.z - anchor.z;
+  p.mosquito.landedOn = selected.id;
+  Object.assign(p.pos, selected.point);
+  p.vel.x = p.vel.y = p.vel.z = 0;
 }
 /** Camera-space offset of the body tip (nose and wings) for a view
  *  orientation: the point the sim keeps out of the room shell so nose-first
@@ -152,20 +195,18 @@ export function registerLogicSystems(world: NightWorld): void {
   });
 
   world.system("flight", (w, dt) => {
-    const res = w.res;
-    const { input, night } = res;
+    const { input, night } = w.res;
     const p = playerState(w);
     if (!p) return;
     const { mosquito, pos } = p;
     const vel = w.get<Pos>(p.player, "vel")!;
 
     if (mosquito.landedOn !== null) {
-      const hostPos = w.get<Pos>(mosquito.landedOn, "pos")!;
-      pos.x = hostPos.x + mosquito.perch.x;
-      pos.y = hostPos.y + mosquito.perch.y;
-      pos.z = hostPos.z + mosquito.perch.z;
-      // perches can reach past the shell (the sleeper lies against the east
-      // wall): hold the eye a near-plane-clearing distance inside the room
+      const anchor = w.get<Pos>(mosquito.landedOn, "pos")!;
+      pos.x = anchor.x + mosquito.perch.x;
+      pos.y = anchor.y + mosquito.perch.y;
+      pos.z = anchor.z + mosquito.perch.z;
+      // Keep the eye a near-plane-clearing distance inside the Bedroom shell.
       pos.x = Math.max(ROOM.minX + 0.06, Math.min(ROOM.maxX - 0.06, pos.x));
       pos.y = Math.max(0.04, Math.min(ROOM.height - 0.06, pos.y));
       pos.z = Math.max(ROOM.minZ + 0.06, Math.min(ROOM.maxZ - 0.06, pos.z));
@@ -179,7 +220,7 @@ export function registerLogicSystems(world: NightWorld): void {
         mosquito.feeding = false;
         vel.y = 1.2;
       }
-      drainOrStarve(mosquito, night, dt, PASSIVE_DRAIN_FEMALE);
+      drainOrStarve(mosquito, night, dt, mosquito.sex === "male" ? PASSIVE_DRAIN_MALE : PASSIVE_DRAIN_FEMALE);
       return;
     }
 
@@ -209,6 +250,18 @@ export function registerLogicSystems(world: NightWorld): void {
     pos.y += vel.y * dt;
     pos.z += vel.z * dt;
 
+
+
+    const drainRate =
+      (mosquito.sex === "male" ? PASSIVE_DRAIN_MALE : PASSIVE_DRAIN_FEMALE) +
+      (input.forward ? FLIGHT_DRAIN : 0);
+    drainOrStarve(mosquito, night, dt, drainRate);
+  });
+
+  world.system("collision", (w) => {
+    const p = playerState(w);
+    if (!p || p.mosquito.landedOn !== null) return;
+    const { pos, vel, mosquito } = p;
     // room shell
     if (pos.x < ROOM.minX + 0.05 || pos.x > ROOM.maxX - 0.05) {
       pos.x = Math.max(ROOM.minX + 0.05, Math.min(ROOM.maxX - 0.05, pos.x));
@@ -272,26 +325,10 @@ export function registerLogicSystems(world: NightWorld): void {
         if (nz !== 0) vel.z *= -0.2;
       }
     }
+  });
 
-    // landing: interact near a Host — perch on the body where you touched down
-    if (input.interactPressed) {
-      for (const id of w.query("host")) {
-        const hp = w.get<Pos>(id, "pos")!;
-        if (Math.hypot(hp.x - pos.x, hp.y - pos.y, hp.z - pos.z) < LAND_RANGE) {
-          const perch = perchPoint(w.get<Host>(id, "host")!.kind, pos.x, pos.y, pos.z);
-          mosquito.perch.x = perch.x - hp.x;
-          mosquito.perch.y = perch.y - hp.y;
-          mosquito.perch.z = perch.z - hp.z;
-          mosquito.landedOn = id;
-          break;
-        }
-      }
-    }
-
-    const drainRate =
-      (mosquito.sex === "male" ? PASSIVE_DRAIN_MALE : PASSIVE_DRAIN_FEMALE) +
-      (input.forward ? FLIGHT_DRAIN : 0);
-    drainOrStarve(mosquito, night, dt, drainRate);
+  world.system("hostLanding", (w) => {
+    if (!frozen(w.res.night) && w.res.input.interactPressed) landOn(w, w.query("host"), true);
   });
 
   world.system("courtship", (w, dt) => {
@@ -355,7 +392,7 @@ export function registerLogicSystems(world: NightWorld): void {
     if (frozen(night)) return;
     const p = playerState(w);
     if (!p || !input.interactPressed) return;
-    if (p.mosquito.landedOn !== null) return; // interact means drink/land contexts already handled
+    if (p.mosquito.landedOn !== null) return; // interactions require free flight
 
     // sip Nectar
     for (const id of w.query("plant")) {
@@ -364,6 +401,7 @@ export function registerLogicSystems(world: NightWorld): void {
         const plant = w.get<Plant>(id, "plant")!;
         p.mosquito.energy = Math.min(p.mosquito.maxEnergy, p.mosquito.energy + sipNectar(plant));
         night.sips += 1;
+        input.interactPressed = false;
         return;
       }
     }
@@ -377,10 +415,15 @@ export function registerLogicSystems(world: NightWorld): void {
           night.laidEggs = true;
           night.voluntaryEnd = true;
           night.spotCeiling = spot.quality;
+          input.interactPressed = false;
           return;
         }
       }
     }
+  });
+
+  world.system("surfaceLanding", (w) => {
+    if (!frozen(w.res.night) && w.res.input.interactPressed) landOn(w, w.query("collider"));
   });
 
   world.system("nightTimer", (w, dt) => {
